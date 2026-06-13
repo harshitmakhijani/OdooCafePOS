@@ -52,8 +52,12 @@ export class UsersService {
     );
   }
 
+  // New accounts are provisioned with a fixed default password; the user can
+  // rotate it later via the "Change Password" control.
+  private static readonly DEFAULT_PASSWORD = 'password123';
+
   async create(dto: CreateUserDto) {
-    const { password, ...userData } = dto;
+    const userData = dto;
 
     // Check unique email and username
     const existing = await this.prisma.user.findFirst({
@@ -72,7 +76,7 @@ export class UsersService {
       throw new ConflictException(`Username ${userData.username} is already in use`);
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(UsersService.DEFAULT_PASSWORD, 10);
 
     const user = await this.prisma.user.create({
       data: {

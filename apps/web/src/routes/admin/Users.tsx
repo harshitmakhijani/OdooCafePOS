@@ -77,6 +77,7 @@ export function Users() {
 
   const handleUserSubmit = async () => {
     if (!formName.trim() || !formEmail.trim() || !formUsername.trim()) return;
+
     try {
       setSubmitting(true);
       setError(null);
