@@ -1,5 +1,6 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, Res, StreamableFile } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Response } from 'express';
 import { Role } from '@cafe-pos/types';
 import { Roles } from '../common/decorators/roles.decorator';
 import { ReportsService } from './reports.service';
@@ -50,7 +51,26 @@ export class ReportsController {
   @Get('export')
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Export report as pdf or xls' })
-  exportReport(@Query() query: ReportExportDto) {
-    return this.reportsService.exportReport(query);
+  async exportReport(
+    @Query() query: ReportExportDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const format = query.format ?? 'pdf';
+    const buffer = await this.reportsService.exportReport(query);
+
+    if (format === 'xls') {
+      res.set({
+        'Content-Type':
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': 'attachment; filename="report.xlsx"',
+      });
+    } else {
+      res.set({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': 'attachment; filename="report.pdf"',
+      });
+    }
+
+    return new StreamableFile(buffer);
   }
 }

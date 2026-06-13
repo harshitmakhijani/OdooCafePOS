@@ -14,7 +14,7 @@ import { UpdateOrderDto } from './dto/update-order.dto';
 import { ApplyCouponDto } from './dto/apply-coupon.dto';
 import { Paginated } from '../common/interceptors/response.interceptor';
 import type { KdsTicket, OrderUpdatedEvent, TableStatusEvent } from '@cafe-pos/types';
-import { KdsStage, TableStatus } from '@cafe-pos/types';
+import { KdsStage, TableStatus, BookingStatus } from '@cafe-pos/types';
 
 @Injectable()
 export class OrdersService {
@@ -288,7 +288,18 @@ export class OrdersService {
   /* ────────────── MARK PAID (exposed for Dev 2 Razorpay) ────────────── */
 
   async markPaid(orderId: string) {
-    const order = await this.prisma.order.update({
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+    if (!order) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+
+    if (order.status === 'PAID') {
+      return order; // already paid, idempotent
+    }
+
+    const updated = await this.prisma.order.update({
       where: { id: orderId },
       data: {
         status: 'PAID',
@@ -298,25 +309,41 @@ export class OrdersService {
     });
 
     // Emit events
-    this.emitOrderUpdated(order);
-    if (order.tableId) {
+    this.emitOrderUpdated(updated);
+    if (updated.tableId) {
       // Check if table still has draft orders
+      let tableStatus = TableStatus.AVAILABLE;
       const draftOnTable = await this.prisma.order.count({
-        where: { tableId: order.tableId, status: 'DRAFT' },
+        where: { tableId: updated.tableId, status: 'DRAFT' },
       });
-      this.emitTableStatus(
-        order.tableId,
-        draftOnTable > 0 ? TableStatus.OCCUPIED : TableStatus.AVAILABLE,
-      );
+      if (draftOnTable > 0) {
+        tableStatus = TableStatus.OCCUPIED;
+      } else {
+        const currentBooking = await this.prisma.booking.findFirst({
+          where: {
+            tableId: updated.tableId,
+            status: BookingStatus.BOOKED,
+            reservedAt: {
+              gte: new Date(Date.now() - 2 * 60 * 60 * 1000),
+              lte: new Date(Date.now() + 2 * 60 * 60 * 1000),
+            },
+          },
+        });
+        if (currentBooking) {
+          tableStatus = TableStatus.RESERVED;
+        }
+      }
+      this.emitTableStatus(updated.tableId, tableStatus);
     }
 
     // Emit KDS ticket removed if it was sent to kitchen
-    if (order.kdsStage !== 'NONE') {
+    if (updated.kdsStage !== 'NONE') {
       this.realtime.emitKdsTicketRemoved({ orderId });
     }
 
-    return order;
+    return updated;
   }
+
 
   /* ────────────── CANCEL/DELETE (DRAFT only) ────────────── */
 
@@ -453,4 +480,7 @@ export class OrdersService {
     const payload: TableStatusEvent = { tableId, status };
     this.realtime.emitTableStatus(payload);
   }
+
+
 }
+

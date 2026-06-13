@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Headers, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, Req, Res } from '@nestjs/common';
+import { Request, Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Role } from '@cafe-pos/types';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -39,17 +40,23 @@ export class PaymentsController {
   @Public()
   @ApiOperation({ summary: 'Razorpay webhook endpoint' })
   webhook(
-    @Body() _body: unknown,
-    @Headers('x-razorpay-signature') _signature: string,
+    @Req() req: Request & { rawBody?: Buffer },
+    @Headers('x-razorpay-signature') signature: string,
   ) {
-    return this.paymentsService.webhook(_body, _signature);
+    return this.paymentsService.webhook(req.rawBody, signature);
   }
 
   @Get('orders/:id/receipt.pdf')
   @Roles(Role.CASHIER)
   @ApiOperation({ summary: 'Download a PDF receipt for an order' })
-  receiptPdf(@Param('id') id: string) {
-    return this.paymentsService.receiptPdf(id);
+  async receiptPdf(@Param('id') id: string, @Res() res: Response) {
+    const pdfBuffer = await this.paymentsService.receiptPdf(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Length': pdfBuffer.length,
+      'Content-Disposition': `attachment; filename="receipt-${id}.pdf"`,
+    });
+    res.end(pdfBuffer);
   }
 
   @Post('orders/:id/receipt/email')
