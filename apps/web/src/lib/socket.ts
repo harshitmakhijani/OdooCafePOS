@@ -13,16 +13,11 @@ let socket: Socket<ServerToClientEvents> | null = null;
  */
 export function getSocket(): Socket<ServerToClientEvents> {
   if (!socket) {
+    const token = useAuthStore.getState().accessToken;
     socket = io(SOCKET_URL, {
       autoConnect: true,
       transports: ['websocket'],
-      // `auth` as a callback is re-invoked on every (re)connect, so the CURRENT
-      // access token is always sent — even if the socket was created before login
-      // or the token was rotated by a refresh since the last connect (PRD §14).
-      auth: (cb: (data: { token?: string }) => void) => {
-        const token = useAuthStore.getState().accessToken;
-        cb({ token: token ? `Bearer ${token}` : undefined });
-      },
+      auth: { token: token ? `Bearer ${token}` : undefined },
     });
   }
   return socket;
@@ -34,13 +29,3 @@ export function disconnectSocket(): void {
     socket = null;
   }
 }
-
-// When the access token changes (login / refresh / logout), drop the existing
-// socket so the next getSocket() reconnects with the fresh token.
-let lastToken = useAuthStore.getState().accessToken;
-useAuthStore.subscribe((state) => {
-  if (state.accessToken !== lastToken) {
-    lastToken = state.accessToken;
-    disconnectSocket();
-  }
-});

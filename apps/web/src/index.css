@@ -1,60 +1,130 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --background: 36 22% 94%; /* Cream #F4F0EB */
+    --foreground: 0 0% 0%; /* Pure Black */
+
+    --card: 0 0% 100%; /* White */
+    --card-foreground: 0 0% 0%;
+
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 24 95% 53%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --popover-foreground: 0 0% 0%;
+
+    --primary: 7 77% 68%; /* Coral #EE7A6B */
+    --primary-foreground: 0 0% 100%; /* White */
+
+    --secondary: 260 50% 76%; /* Lavender #B8A3E3 */
+    --secondary-foreground: 0 0% 0%;
+
+    --muted: 36 10% 85%; /* Muted cream-gray */
+    --muted-foreground: 0 0% 40%;
+
+    --accent: 74 79% 60%; /* Lime Green #C3E84D */
+    --accent-foreground: 0 0% 0%;
+
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 24 95% 53%;
-    --radius: 0.5rem;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 0%; /* Pure black borders */
+    --input: 0 0% 0%;
+    --ring: 7 77% 68%; /* Coral primary focus ring */
+
+    --radius: 0.5rem; /* 8px radius */
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 24 95% 53%;
+    --background: 0 0% 10%;
+    --foreground: 0 0% 95%;
+    --card: 0 0% 15%;
+    --card-foreground: 0 0% 95%;
+    --popover: 0 0% 15%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 7 77% 68%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --secondary: 260 50% 76%;
+    --secondary-foreground: 0 0% 0%;
+    --muted: 0 0% 20%;
+    --muted-foreground: 0 0% 70%;
+    --accent: 74 79% 60%;
+    --accent-foreground: 0 0% 0%;
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 24 95% 53%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 95%;
+    --input: 0 0% 95%;
+    --ring: 7 77% 68%;
   }
 }
 
 @layer base {
   * {
-    @apply border-border;
+    @apply border-black;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-neubrutal-cream text-black font-sans;
     min-height: 100vh;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', sans-serif;
+    @apply font-extrabold tracking-tight;
+  }
+}
+
+/* Neubrutalism utility helper classes */
+@layer utilities {
+  .nb-card {
+    @apply bg-white border-2 border-black rounded-lg shadow-neubrutal-md transition-all;
+  }
+  
+  .nb-card-hover {
+    @apply hover:-translate-x-[2px] hover:-translate-y-[2px] hover:shadow-neubrutal-lg;
+  }
+
+  .nb-button {
+    @apply inline-flex items-center justify-center font-bold px-4 py-2 rounded-lg border-2 border-black shadow-neubrutal-sm transition-all select-none;
+  }
+
+  .nb-button:hover:not(:disabled) {
+    @apply -translate-x-[1px] -translate-y-[1px] shadow-neubrutal-md;
+  }
+
+  .nb-button:active:not(:disabled) {
+    @apply translate-x-[1px] translate-y-[1px] shadow-[1px_1px_0px_0px_rgba(0,0,0,1)];
+  }
+
+  .nb-button:disabled {
+    @apply opacity-50 cursor-not-allowed shadow-none translate-x-0 translate-y-0;
+  }
+
+  .nb-button-primary {
+    @apply bg-neubrutal-coral text-white nb-button;
+  }
+
+  .nb-button-secondary {
+    @apply bg-neubrutal-lavender text-black nb-button;
+  }
+
+  .nb-button-accent {
+    @apply bg-neubrutal-lime text-black nb-button;
+  }
+
+  .nb-button-white {
+    @apply bg-white text-black nb-button;
+  }
+
+  .nb-button-destructive {
+    @apply bg-destructive text-destructive-foreground nb-button;
+  }
+
+  .nb-input {
+    @apply border-2 border-black bg-white rounded-lg px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neubrutal-coral focus-visible:ring-offset-2 transition-all placeholder:text-muted-foreground shadow-[inset_2px_2px_0px_0px_rgba(0,0,0,0.05)];
+  }
+
+  .nb-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border-2 border-black shadow-neubrutal-sm;
   }
 }

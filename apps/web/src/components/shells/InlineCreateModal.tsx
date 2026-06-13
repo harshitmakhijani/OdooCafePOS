@@ -1,10 +1,8 @@
 import type { FormEvent, ReactNode } from 'react';
-import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -22,8 +20,8 @@ export interface InlineCreateModalProps {
 }
 
 /**
- * Reusable inline-create modal (base prompt §6) — e.g. creating a Category
- * without leaving the Product form (PRD §8.2). Presentation only.
+ * Reusable inline-create modal styled in Neubrutalism:
+ * Combines Radix primitives with high-contrast borders and active-click animations.
  */
 export function InlineCreateModal({
   open,
@@ -42,21 +40,39 @@ export function InlineCreateModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="border-[3px] border-black bg-neubrutal-cream rounded-none p-0 overflow-hidden shadow-neubrutal-lg max-w-md w-[95%]">
         <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-            {description && <DialogDescription>{description}</DialogDescription>}
+          <DialogHeader className="bg-neubrutal-lavender border-b-2 border-black p-5 text-left flex flex-col space-y-1">
+            <DialogTitle className="text-xl font-black text-black uppercase tracking-wide">
+              {title}
+            </DialogTitle>
+            {description && (
+              <DialogDescription className="text-xs font-bold text-neutral-800">
+                {description}
+              </DialogDescription>
+            )}
           </DialogHeader>
-          <div className="space-y-4 py-4">{children}</div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+
+          <div className="space-y-4 p-5 bg-white text-sm font-bold text-black">
+            {children}
+          </div>
+
+          <div className="flex justify-end gap-3 p-5 bg-neutral-50 border-t-2 border-black">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="nb-button-white px-4 py-2 text-xs uppercase tracking-wider font-extrabold"
+            >
               Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="nb-button-primary px-4 py-2 text-xs uppercase tracking-wider font-extrabold"
+            >
               {isSubmitting ? 'Creating…' : submitLabel}
-            </Button>
-          </DialogFooter>
+            </button>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

@@ -1,6 +1,4 @@
 import type { FormEvent, ReactNode } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export interface FormShellProps {
   title: string;
@@ -14,8 +12,8 @@ export interface FormShellProps {
 }
 
 /**
- * Reusable create/edit form shell (base prompt §6): a titled card with a fields
- * slot and Save / Discard actions. No field or persistence logic of its own.
+ * Reusable create/edit form shell styled in Neubrutalism:
+ * Features thick outlines, hard drop-shadows, sand backdrop elements, and responsive action keys.
  */
 export function FormShell({
   title,
@@ -32,25 +30,34 @@ export function FormShell({
   };
 
   return (
-    <Card className="mx-auto max-w-2xl">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-5">
+    <div className="mx-auto max-w-2xl nb-card border-2 border-black shadow-neubrutal-md bg-white">
+      <div className="border-b-2 border-black p-5 bg-neubrutal-lavender/30">
+        <h2 className="text-2xl font-black text-black uppercase tracking-wide">{title}</h2>
+      </div>
+      <div className="p-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-4">{children}</div>
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-3 pt-4 border-t border-dashed border-neutral-300">
             {onDiscard && (
-              <Button type="button" variant="outline" onClick={onDiscard} disabled={isSubmitting}>
+              <button
+                type="button"
+                onClick={onDiscard}
+                disabled={isSubmitting}
+                className="nb-button-white px-5 py-2 text-sm uppercase tracking-wider font-extrabold"
+              >
                 {discardLabel}
-              </Button>
+              </button>
             )}
-            <Button type="submit" disabled={isSubmitting}>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="nb-button-primary px-5 py-2 text-sm uppercase tracking-wider font-extrabold"
+            >
               {isSubmitting ? 'Saving…' : submitLabel}
-            </Button>
+            </button>
           </div>
         </form>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

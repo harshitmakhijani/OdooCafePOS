@@ -1,9 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Plus, Search, Trash2, Archive } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Card } from '@/components/ui/card';
 
 export interface ListColumn<T> {
   key: string;
@@ -30,9 +27,8 @@ export interface ListShellProps<T> {
 }
 
 /**
- * Reusable admin list view (base prompt §6): New button, search, multi-select
- * checkboxes, and bulk Delete / Archive. Pure presentation — all data behavior
- * is delegated to callbacks. Selection is the only internal state.
+ * Reusable admin list view styled in Neubrutalism:
+ * Big bold headers, thick borders, solid drop shadows, sand inputs, and active depressions.
  */
 export function ListShell<T>({
   title,
@@ -66,104 +62,139 @@ export function ListShell<T>({
     });
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+    <div className="space-y-6">
+      {/* Header Panel */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b-4 border-black pb-4">
+        <h1 className="text-3xl font-black text-black tracking-tight uppercase">{title}</h1>
         {onNew && (
-          <Button onClick={onNew}>
-            <Plus className="h-4 w-4" /> {newLabel}
-          </Button>
+          <button onClick={onNew} className="nb-button-secondary py-2.5 px-5 text-sm uppercase tracking-wider font-extrabold">
+            <Plus className="mr-2 h-4 w-4 stroke-[3px]" /> {newLabel}
+          </button>
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[220px]">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search…"
-            className="pl-9"
+      {/* Search and Selection Bulk Panel */}
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="relative flex-1 min-w-[280px]">
+          <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-black stroke-[2.5px]" />
+          <input
+            type="text"
+            placeholder="Search record..."
+            className="nb-input w-full pl-11 py-2.5 font-bold text-black border-2 border-black"
             value={searchValue}
             onChange={(e) => onSearchChange(e.target.value)}
           />
         </div>
+
         {selectedIds.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">{selectedIds.length} selected</span>
-            {onBulkArchive && (
-              <Button variant="outline" size="sm" onClick={() => onBulkArchive(selectedIds)}>
-                <Archive className="h-4 w-4" /> Archive
-              </Button>
-            )}
-            {onBulkDelete && (
-              <Button variant="destructive" size="sm" onClick={() => onBulkDelete(selectedIds)}>
-                <Trash2 className="h-4 w-4" /> Delete
-              </Button>
-            )}
+          <div className="flex items-center gap-3 bg-neubrutal-lime border-2 border-black p-2.5 rounded-lg shadow-neubrutal-sm animate-in fade-in slide-in-from-top-1 duration-150">
+            <span className="text-xs font-black text-black uppercase tracking-wider">
+              {selectedIds.length} Selected
+            </span>
+            <div className="flex gap-2">
+              {onBulkArchive && (
+                <button
+                  onClick={() => onBulkArchive(selectedIds)}
+                  className="nb-button-white px-3 py-1.5 text-xs uppercase font-extrabold flex items-center gap-1 shadow-none hover:shadow-neubrutal-sm active:translate-x-[1px] active:translate-y-[1px]"
+                >
+                  <Archive className="h-3.5 w-3.5" /> Archive
+                </button>
+              )}
+              {onBulkDelete && (
+                <button
+                  onClick={() => onBulkDelete(selectedIds)}
+                  className="nb-button-destructive px-3 py-1.5 text-xs uppercase font-extrabold flex items-center gap-1 shadow-none hover:shadow-neubrutal-sm active:translate-x-[1px] active:translate-y-[1px]"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Delete
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
 
-      <Card className="overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="border-b bg-muted/40">
-            <tr className="text-left">
-              <th className="w-12 px-4 py-3">
-                <Checkbox
-                  checked={allSelected}
-                  onCheckedChange={toggleAll}
-                  aria-label="Select all"
-                />
-              </th>
-              {columns.map((col) => (
-                <th key={col.key} className={`px-4 py-3 font-medium ${col.className ?? ''}`}>
-                  {col.header}
+      {/* Table Container */}
+      <div className="nb-card overflow-hidden p-0 border-2 border-black shadow-neubrutal-md bg-white">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-left text-sm font-bold text-black">
+            <thead>
+              <tr className="border-b-2 border-black bg-neubrutal-lavender">
+                <th className="w-12 px-4 py-3.5 border-r-2 border-black">
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={toggleAll}
+                    aria-label="Select all"
+                    className="border-2 border-black data-[state=checked]:bg-black data-[state=checked]:text-white rounded-none"
+                  />
                 </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <tr>
-                <td colSpan={columns.length + 1} className="px-4 py-10 text-center text-muted-foreground">
-                  Loading…
-                </td>
-              </tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length + 1} className="px-4 py-10 text-center text-muted-foreground">
-                  {emptyMessage}
-                </td>
-              </tr>
-            ) : (
-              rows.map((row) => {
-                const id = getRowId(row);
-                return (
-                  <tr
-                    key={id}
-                    className="border-b last:border-0 hover:bg-muted/30"
-                    onClick={() => onRowClick?.(row)}
+                {columns.map((col) => (
+                  <th
+                    key={col.key}
+                    className={`px-4 py-3.5 text-xs uppercase font-black tracking-wider text-black border-r-2 border-black last:border-r-0 ${
+                      col.className ?? ''
+                    }`}
                   >
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      <Checkbox
-                        checked={selected.has(id)}
-                        onCheckedChange={() => toggleOne(id)}
-                        aria-label={`Select ${id}`}
-                      />
-                    </td>
-                    {columns.map((col) => (
-                      <td key={col.key} className={`px-4 py-3 ${col.className ?? ''}`}>
-                        {col.render
-                          ? col.render(row)
-                          : String((row as Record<string, unknown>)[col.key] ?? '')}
+                    {col.header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr>
+                  <td colSpan={columns.length + 1} className="px-4 py-12 text-center text-neutral-500 font-bold uppercase tracking-wider">
+                    <div className="flex justify-center items-center gap-2">
+                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-black border-t-neubrutal-coral"></div>
+                      <span>Loading records...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td colSpan={columns.length + 1} className="px-4 py-12 text-center text-neutral-500 font-bold uppercase tracking-wider">
+                    {emptyMessage}
+                  </td>
+                </tr>
+              ) : (
+                rows.map((row) => {
+                  const id = getRowId(row);
+                  const isRowSelected = selected.has(id);
+                  return (
+                    <tr
+                      key={id}
+                      className={`border-b-2 border-black last:border-b-0 cursor-pointer transition-colors duration-100 ${
+                        isRowSelected ? 'bg-neubrutal-coral-soft/50' : 'hover:bg-neutral-50'
+                      }`}
+                      onClick={() => onRowClick?.(row)}
+                    >
+                      <td className="px-4 py-4 border-r-2 border-black" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={isRowSelected}
+                          onCheckedChange={() => toggleOne(id)}
+                          aria-label={`Select ${id}`}
+                          className="border-2 border-black data-[state=checked]:bg-neubrutal-coral data-[state=checked]:text-white rounded-none"
+                        />
                       </td>
-                    ))}
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </Card>
+                      {columns.map((col) => (
+                        <td
+                          key={col.key}
+                          className={`px-4 py-4 border-r-2 border-black last:border-r-0 font-bold text-black ${
+                            col.className ?? ''
+                          }`}
+                        >
+                          {col.render
+                            ? col.render(row)
+                            : String((row as Record<string, unknown>)[col.key] ?? '')}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
