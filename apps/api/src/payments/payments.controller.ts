@@ -5,7 +5,6 @@ import { Role } from '@cafe-pos/types';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { PaymentsService } from './payments.service';
-import { CashPaymentDto } from './dto/cash-payment.dto';
 import { RazorpayVerifyDto } from './dto/razorpay-verify.dto';
 import { EmailReceiptDto } from './dto/email-receipt.dto';
 
@@ -15,12 +14,9 @@ import { EmailReceiptDto } from './dto/email-receipt.dto';
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
-  @Post('orders/:id/pay/cash')
-  @Roles(Role.CASHIER)
-  @ApiOperation({ summary: 'Pay an order with cash' })
-  payCash(@Param('id') id: string, @Body() dto: CashPaymentDto) {
-    return this.paymentsService.payCash(id, dto);
-  }
+  // NOTE: `POST /orders/:id/pay/cash` is handled by OrdersController (single source
+  // of truth, Decimal-based). It was previously duplicated here — removed to avoid
+  // two divergent handlers on the same route.
 
   @Post('orders/:id/pay/razorpay/create')
   @Roles(Role.CASHIER)

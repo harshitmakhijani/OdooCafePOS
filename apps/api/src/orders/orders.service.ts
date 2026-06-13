@@ -7,7 +7,12 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
-import { PricingService, type PricingCartLine, type PricingPromotion } from './pricing.service';
+import {
+  PricingService,
+  type PricingCartLine,
+  type PricingPromotion,
+  type PricingResult,
+} from './pricing.service';
 import { OrderQueryDto } from './dto/order-query.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
@@ -35,8 +40,16 @@ export class OrdersService {
         customer: { is: { name: { contains: search, mode: 'insensitive' } } },
       });
       const parsed = Number(search);
-      if (!isNaN(parsed)) {
+      if (!isNaN(parsed) && search.trim() !== '') {
         orConditions.push({ orderNumber: parsed });
+      }
+      // Search by date (PRD §9.7) — a YYYY-MM-DD value matches that calendar day.
+      if (/^\d{4}-\d{2}-\d{2}$/.test(search.trim())) {
+        const dayStart = new Date(`${search.trim()}T00:00:00.000Z`);
+        if (!isNaN(dayStart.getTime())) {
+          const dayEnd = new Date(dayStart.getTime() + 86_400_000);
+          orConditions.push({ createdAt: { gte: dayStart, lt: dayEnd } });
+        }
       }
     }
 
@@ -81,23 +94,34 @@ export class OrdersService {
   /* ────────────── CREATE DRAFT ────────────── */
 
   async create(dto: CreateOrderDto, sessionId: string) {
-    // Verify table exists
+    // Verify table exists, and reuse the table's existing draft if one is open.
+    // An active order belongs to the TABLE, not the employee — any cashier may
+    // continue it rather than spawning a duplicate draft (PRD §7.4).
     if (dto.tableId) {
       const table = await this.prisma.table.findUnique({ where: { id: dto.tableId } });
       if (!table) throw new NotFoundException('Table not found');
+
+      const existingDraft = await this.prisma.order.findFirst({
+        where: { tableId: dto.tableId, status: 'DRAFT' },
+        include: { lines: true, customer: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      if (existingDraft) {
+        return existingDraft;
+      }
     }
 
     const order = await this.prisma.order.create({
       data: {
         sessionId,
-        tableId: dto.tableId,
+        tableId: dto.tableId ?? null,
       },
       include: { lines: true, customer: true },
     });
 
     // Emit table occupied
-    if (dto.tableId) {
-      this.emitTableStatus(dto.tableId, TableStatus.OCCUPIED);
+    if (order.tableId) {
+      this.emitTableStatus(order.tableId, TableStatus.OCCUPIED);
       this.emitOrderUpdated(order);
     }
 
@@ -107,63 +131,94 @@ export class OrdersService {
   /* ────────────── UPDATE (lines/customer, optimistic locking) ────────────── */
 
   async update(id: string, dto: UpdateOrderDto) {
-    const order = await this.getOrderOrFail(id);
-    this.ensureDraft(order);
+    // Everything runs in one transaction so a failed line rebuild never leaves
+    // the order half-updated, and the version check is enforced ATOMICALLY at the
+    // final write (read-then-write would be a TOCTOU race — PRD §16.2).
+    const updatedOrder = await this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({ where: { id }, include: { lines: true } });
+      if (!order) throw new NotFoundException('Order not found');
+      if (order.status !== 'DRAFT') {
+        throw new UnprocessableEntityException(
+          `Cannot modify an order with status "${order.status}". Only DRAFT orders can be edited.`,
+        );
+      }
+      // Fast-fail with a clear message; the real guard is the version-scoped
+      // updateMany below (so concurrent writers can't both win).
+      if (order.version !== dto.version) {
+        throw new ConflictException(
+          `Order has been modified by another terminal (expected version ${dto.version}, current ${order.version})`,
+        );
+      }
 
-    // Optimistic locking (PRD §16.2)
-    if (order.version !== dto.version) {
-      throw new ConflictException(
-        `Order has been modified by another terminal (expected version ${dto.version}, current ${order.version})`,
-      );
-    }
-
-    // Update customer if provided
-    if (dto.customerId !== undefined) {
+      // Validate customer if provided
       if (dto.customerId) {
-        const customer = await this.prisma.customer.findUnique({ where: { id: dto.customerId } });
+        const customer = await tx.customer.findUnique({ where: { id: dto.customerId } });
         if (!customer) throw new NotFoundException('Customer not found');
       }
-    }
 
-    // Replace lines if provided
-    if (dto.lines) {
-      // Delete existing lines
-      await this.prisma.orderLine.deleteMany({ where: { orderId: id } });
+      // Replace lines if provided
+      if (dto.lines) {
+        await tx.orderLine.deleteMany({ where: { orderId: id } });
+        for (const lineInput of dto.lines) {
+          const product = await tx.product.findUnique({ where: { id: lineInput.productId } });
+          if (!product) throw new NotFoundException(`Product ${lineInput.productId} not found`);
 
-      // Create new lines with product snapshots
-      for (const lineInput of dto.lines) {
-        const product = await this.prisma.product.findUnique({
-          where: { id: lineInput.productId },
-        });
-        if (!product) throw new NotFoundException(`Product ${lineInput.productId} not found`);
+          const unitPrice =
+            lineInput.unitPrice != null ? new Prisma.Decimal(lineInput.unitPrice) : product.price;
+          const quantity = new Prisma.Decimal(lineInput.quantity);
+          const lineTotal = unitPrice
+            .mul(quantity)
+            .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
 
-        const unitPrice = lineInput.unitPrice != null
-          ? new Prisma.Decimal(lineInput.unitPrice)
-          : product.price;
-        const quantity = new Prisma.Decimal(lineInput.quantity);
-        const lineTotal = unitPrice.mul(quantity).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
-
-        await this.prisma.orderLine.create({
-          data: {
-            orderId: id,
-            productId: product.id,
-            productName: product.name,
-            unitPrice,
-            taxPercent: product.taxPercent,
-            quantity,
-            lineTotal,
-          },
-        });
+          await tx.orderLine.create({
+            data: {
+              orderId: id,
+              productId: product.id,
+              productName: product.name,
+              unitPrice,
+              taxPercent: product.taxPercent,
+              quantity,
+              lineTotal,
+            },
+          });
+        }
       }
-    }
 
-    // Recompute totals via pricing engine
-    const updatedOrder = await this.recomputeAndSave(id, dto.customerId);
+      // Recompute totals from the final lines via the pricing engine.
+      const finalLines = await tx.orderLine.findMany({ where: { orderId: id } });
+      const promotions = await tx.promotion.findMany({ where: { active: true } });
+      const result = this.computeTotals(finalLines, order.appliedPromotionId, promotions);
 
-    // Emit updates
-    this.emitOrderUpdated(updatedOrder);
-    if (updatedOrder.tableId) {
-      this.emitTableStatus(updatedOrder.tableId, TableStatus.OCCUPIED);
+      // Atomic optimistic-lock guard: only matches if the version is still the one
+      // the client read. A concurrent committed update flips the version → count 0.
+      const claim = await tx.order.updateMany({
+        where: { id, version: dto.version, status: 'DRAFT' },
+        data: {
+          subtotal: result.subtotal,
+          discountTotal: result.discountTotal,
+          taxTotal: result.taxTotal,
+          total: result.total,
+          appliedPromotionId: result.appliedPromotionId,
+          version: { increment: 1 },
+          ...(dto.customerId !== undefined ? { customerId: dto.customerId || null } : {}),
+        },
+      });
+      if (claim.count === 0) {
+        throw new ConflictException('Order has been modified by another terminal');
+      }
+
+      return tx.order.findUnique({
+        where: { id },
+        include: { lines: true, customer: true, payment: true },
+      });
+    });
+
+    // Emit updates after the transaction commits.
+    if (updatedOrder) {
+      this.emitOrderUpdated(updatedOrder);
+      if (updatedOrder.tableId) {
+        this.emitTableStatus(updatedOrder.tableId, TableStatus.OCCUPIED);
+      }
     }
 
     return updatedOrder;
@@ -254,24 +309,35 @@ export class OrdersService {
     const order = await this.getOrderOrFail(id);
     this.ensureDraft(order);
 
-    const total = Number(order.total);
-    if (cashReceived < total) {
+    // Money comparison in Decimal, never float (PRD §16.3).
+    const received = new Prisma.Decimal(cashReceived);
+    if (received.lt(order.total)) {
       throw new UnprocessableEntityException(
-        `Cash received (${cashReceived}) is less than order total (${total})`,
+        `Cash received (${received.toFixed(2)}) is less than order total (${order.total.toFixed(2)})`,
       );
     }
 
-    const changeDue = new Prisma.Decimal(cashReceived).sub(order.total);
+    const changeDue = received.sub(order.total);
 
-    // Create payment record
-    await this.prisma.payment.create({
-      data: {
+    // Upsert payment (tolerate a prior PENDING Razorpay record on this order).
+    await this.prisma.payment.upsert({
+      where: { orderId: id },
+      update: {
+        type: 'CASH',
+        status: 'SUCCESS',
+        amount: order.total,
+        cashReceived: received,
+        changeDue,
+        reference: 'Cash',
+      },
+      create: {
         orderId: id,
         type: 'CASH',
         status: 'SUCCESS',
         amount: order.total,
-        cashReceived: new Prisma.Decimal(cashReceived),
+        cashReceived: received,
         changeDue,
+        reference: 'Cash',
       },
     });
 
@@ -280,7 +346,7 @@ export class OrdersService {
 
     return {
       order: paidOrder,
-      cashReceived: new Prisma.Decimal(cashReceived),
+      cashReceived: received,
       changeDue,
     };
   }
@@ -406,42 +472,8 @@ export class OrdersService {
     });
     if (!order) throw new NotFoundException('Order not found');
 
-    // Build pricing input
-    const cartLines: PricingCartLine[] = order.lines.map((l) => ({
-      productId: l.productId,
-      unitPrice: l.unitPrice,
-      quantity: l.quantity,
-      taxPercent: l.taxPercent,
-    }));
-
-    // Get all active promotions
-    const promotions = await this.prisma.promotion.findMany({
-      where: { active: true },
-    });
-
-    // Find the applied coupon code if any
-    let appliedCouponCode: string | null = null;
-    if (order.appliedPromotionId) {
-      const appliedPromo = promotions.find((p) => p.id === order.appliedPromotionId);
-      if (appliedPromo?.code) {
-        appliedCouponCode = appliedPromo.code;
-      }
-    }
-
-    const pricingPromos: PricingPromotion[] = promotions.map((p) => ({
-      id: p.id,
-      type: p.type as PricingPromotion['type'],
-      scope: p.scope as PricingPromotion['scope'],
-      code: p.code,
-      productId: p.productId,
-      minQuantity: p.minQuantity,
-      minOrderAmount: p.minOrderAmount,
-      discountType: p.discountType as PricingPromotion['discountType'],
-      discountValue: p.discountValue,
-      active: p.active,
-    }));
-
-    const result = this.pricing.calculate(cartLines, appliedCouponCode, pricingPromos);
+    const promotions = await this.prisma.promotion.findMany({ where: { active: true } });
+    const result = this.computeTotals(order.lines, order.appliedPromotionId, promotions);
 
     // Save computed totals + bump version
     const updated = await this.prisma.order.update({
@@ -459,6 +491,61 @@ export class OrdersService {
     });
 
     return updated;
+  }
+
+  /**
+   * Map persisted lines + active promotions into the pure pricing engine and
+   * compute server-authoritative totals (PRD §5/§7.1). Shared by update() and
+   * recomputeAndSave() so both paths price identically.
+   */
+  private computeTotals(
+    lines: {
+      productId: string;
+      unitPrice: Prisma.Decimal;
+      quantity: Prisma.Decimal;
+      taxPercent: Prisma.Decimal;
+    }[],
+    appliedPromotionId: string | null,
+    promotions: {
+      id: string;
+      code: string | null;
+      type: string;
+      scope: string;
+      productId: string | null;
+      minQuantity: number | null;
+      minOrderAmount: Prisma.Decimal | null;
+      discountType: string;
+      discountValue: Prisma.Decimal;
+      active: boolean;
+    }[],
+  ): PricingResult {
+    const cartLines: PricingCartLine[] = lines.map((l) => ({
+      productId: l.productId,
+      unitPrice: l.unitPrice,
+      quantity: l.quantity,
+      taxPercent: l.taxPercent,
+    }));
+
+    let appliedCouponCode: string | null = null;
+    if (appliedPromotionId) {
+      const applied = promotions.find((p) => p.id === appliedPromotionId);
+      if (applied?.code) appliedCouponCode = applied.code;
+    }
+
+    const pricingPromos: PricingPromotion[] = promotions.map((p) => ({
+      id: p.id,
+      type: p.type as PricingPromotion['type'],
+      scope: p.scope as PricingPromotion['scope'],
+      code: p.code,
+      productId: p.productId,
+      minQuantity: p.minQuantity,
+      minOrderAmount: p.minOrderAmount,
+      discountType: p.discountType as PricingPromotion['discountType'],
+      discountValue: p.discountValue,
+      active: p.active,
+    }));
+
+    return this.pricing.calculate(cartLines, appliedCouponCode, pricingPromos);
   }
 
   private emitOrderUpdated(order: {

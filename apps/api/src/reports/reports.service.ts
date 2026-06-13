@@ -10,26 +10,38 @@ function buildOrderWhere(query: ReportFilterDto): Prisma.OrderWhereInput {
   const where: Prisma.OrderWhereInput = { status: 'PAID' };
 
   // — Date range (period shortcuts or custom from/to) —
+  // Period boundaries are computed in Asia/Kolkata (IST = UTC+5:30, no DST) even
+  // though timestamps are stored UTC, so "Today/Week/Month" align to IST days
+  // regardless of the server's timezone (PRD §16.3).
   const now = new Date();
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+  const istNow = new Date(now.getTime() + IST_OFFSET_MS); // UTC fields read as IST wall-clock
+  const istY = istNow.getUTCFullYear();
+  const istM = istNow.getUTCMonth();
+  const istD = istNow.getUTCDate();
+  const istWallToUtc = (ms: number) => new Date(ms - IST_OFFSET_MS);
+
   let from: Date | undefined;
   let to: Date | undefined;
 
   if (query.period) {
     switch (query.period) {
       case 'today': {
-        from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        to = new Date(from.getTime() + 86_400_000);
+        const start = Date.UTC(istY, istM, istD);
+        from = istWallToUtc(start);
+        to = istWallToUtc(start + 86_400_000);
         break;
       }
       case 'week': {
-        const day = now.getDay(); // 0=Sun
-        from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day);
-        to = new Date(from.getTime() + 7 * 86_400_000);
+        const dow = istNow.getUTCDay(); // 0=Sun (IST)
+        const start = Date.UTC(istY, istM, istD - dow);
+        from = istWallToUtc(start);
+        to = istWallToUtc(start + 7 * 86_400_000);
         break;
       }
       case 'month': {
-        from = new Date(now.getFullYear(), now.getMonth(), 1);
-        to = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        from = istWallToUtc(Date.UTC(istY, istM, 1));
+        to = istWallToUtc(Date.UTC(istY, istM + 1, 1));
         break;
       }
       // custom — fall through to from/to below
@@ -83,12 +95,11 @@ export class ReportsService {
       _avg: { total: true },
     });
 
+    // Return the bare payload; the global ResponseInterceptor wraps it in { data }.
     return {
-      data: {
-        totalOrders: agg._count.id,
-        revenue: agg._sum.total?.toFixed(2) ?? '0.00',
-        averageOrderValue: agg._avg.total?.toFixed(2) ?? '0.00',
-      },
+      totalOrders: agg._count.id,
+      revenue: agg._sum.total?.toFixed(2) ?? '0.00',
+      averageOrderValue: agg._avg.total?.toFixed(2) ?? '0.00',
     };
   }
 
@@ -145,7 +156,8 @@ export class ReportsService {
 
     const rows: Array<{ bucket: Date; orders: bigint; revenue: string }> =
       await this.prisma.$queryRawUnsafe(
-        `SELECT date_trunc('${truncFn}', "createdAt") AS bucket,
+        // Bucket by IST wall-clock so days/hours align to Asia/Kolkata (PRD §16.3).
+        `SELECT date_trunc('${truncFn}', "createdAt" AT TIME ZONE 'Asia/Kolkata') AS bucket,
                 COUNT(*)::bigint AS orders,
                 COALESCE(SUM("total"), 0)::text AS revenue
          FROM "Order"
@@ -155,13 +167,11 @@ export class ReportsService {
         ...params,
       );
 
-    return {
-      data: rows.map((r) => ({
-        bucket: r.bucket,
-        orders: Number(r.orders),
-        revenue: parseFloat(r.revenue).toFixed(2),
-      })),
-    };
+    return rows.map((r) => ({
+      bucket: r.bucket,
+      orders: Number(r.orders),
+      revenue: parseFloat(r.revenue).toFixed(2),
+    }));
   }
 
   // ── GET /reports/top-categories ────────────────────────────────────
@@ -177,7 +187,7 @@ export class ReportsService {
     const orderIds = orders.map((o) => o.id);
 
     if (orderIds.length === 0) {
-      return { data: [] };
+      return [];
     }
 
     // Group order lines by category
@@ -222,7 +232,7 @@ export class ReportsService {
       }))
       .sort((a, b) => parseFloat(b.revenue) - parseFloat(a.revenue));
 
-    return { data };
+    return data;
   }
 
   // ── GET /reports/top-products ──────────────────────────────────────
@@ -237,7 +247,7 @@ export class ReportsService {
     const orderIds = orders.map((o) => o.id);
 
     if (orderIds.length === 0) {
-      return { data: [] };
+      return [];
     }
 
     const lines = await this.prisma.orderLine.findMany({
@@ -275,7 +285,7 @@ export class ReportsService {
       }))
       .sort((a, b) => parseFloat(b.revenue) - parseFloat(a.revenue));
 
-    return { data };
+    return data;
   }
 
   // ── GET /reports/top-orders ────────────────────────────────────────
@@ -302,40 +312,36 @@ export class ReportsService {
       },
     });
 
-    return {
-      data: orders.map((o) => ({
-        orderId: o.id,
-        orderNumber: o.orderNumber,
-        total: o.total.toFixed(2),
-        createdAt: o.createdAt,
-        employee: o.session.employee,
-        table: o.table
-          ? { id: o.table.id, tableNumber: o.table.tableNumber }
-          : null,
-        lineCount: o._count.lines,
-      })),
-    };
+    return orders.map((o) => ({
+      orderId: o.id,
+      orderNumber: o.orderNumber,
+      total: o.total.toFixed(2),
+      createdAt: o.createdAt,
+      employee: o.session.employee,
+      table: o.table ? { id: o.table.id, tableNumber: o.table.tableNumber } : null,
+      lineCount: o._count.lines,
+    }));
   }
 
   // ── GET /reports/export?format=pdf|xls ─────────────────────────────
   // Generates the full report view as PDF or Excel workbook.
   async exportReport(query: ReportExportDto): Promise<Buffer> {
-    // Gather all report data using the same filters
-    const [summaryResult, trendResult, categoriesResult, productsResult, topOrdersResult] =
-      await Promise.all([
-        this.summary(query),
-        this.salesTrend(query),
-        this.topCategories(query),
-        this.topProducts(query),
-        this.topOrders(query),
-      ]);
+    // Gather all report data using the same filters. The methods now return the
+    // bare payloads (the interceptor wraps HTTP responses, not these calls).
+    const [summary, salesTrend, topCategories, topProducts, topOrders] = await Promise.all([
+      this.summary(query),
+      this.salesTrend(query),
+      this.topCategories(query),
+      this.topProducts(query),
+      this.topOrders(query),
+    ]);
 
     const reportData = {
-      summary: summaryResult.data,
-      salesTrend: trendResult.data,
-      topCategories: categoriesResult.data,
-      topProducts: productsResult.data,
-      topOrders: topOrdersResult.data,
+      summary,
+      salesTrend,
+      topCategories,
+      topProducts,
+      topOrders,
       filters: { ...query },
     };
 

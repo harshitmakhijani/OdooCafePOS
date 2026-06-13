@@ -20,7 +20,8 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
     super({
       jwtFromRequest: ExtractJwt.fromBodyField('refreshToken'),
       ignoreExpiration: false,
-      secretOrKey: config.get<string>('jwt.refreshSecret') ?? 'dev-refresh-secret',
+      // No insecure fallback — fail fast if the secret is not configured.
+      secretOrKey: config.getOrThrow<string>('jwt.refreshSecret'),
       passReqToCallback: true,
     });
   }
@@ -30,7 +31,8 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
     if (!payload?.sub || !refreshToken) {
       throw new UnauthorizedException('Invalid refresh token');
     }
-    // TODO(PRD §16.1): verify the token against the stored/rotated refresh token.
+    // The token is matched against the stored (hashed) per-device refresh token
+    // and rotated in AuthService.refresh().
     return { ...payload, refreshToken };
   }
 }

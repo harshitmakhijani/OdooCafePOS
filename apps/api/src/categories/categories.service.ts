@@ -42,11 +42,12 @@ export class CategoriesService {
   async remove(id: string) {
     await this.ensureExists(id);
 
-    // Check if referenced by a non-draft order (via products → orderLines → order)
+    // Check if any product in this category is referenced by ANY order line
+    // (any order status). Order lines have no cascade, so a hard delete here
+    // would raise P2003 → 500.
     const referenced = await this.prisma.orderLine.findFirst({
       where: {
         product: { categoryId: id },
-        order: { status: { not: 'DRAFT' } },
       },
     });
 

@@ -9,6 +9,7 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { BookingStatus, TableStatus } from '@cafe-pos/types';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { Paginated } from '../common/interceptors/response.interceptor';
 
 @Injectable()
 export class BookingsService {
@@ -76,15 +77,12 @@ export class BookingsService {
       this.prisma.booking.count({ where }),
     ]);
 
-    return {
-      data: bookings,
-      meta: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    };
+    return new Paginated(bookings, {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    });
   }
 
   async create(dto: CreateBookingDto) {
@@ -108,8 +106,14 @@ export class BookingsService {
 
     const booking = await this.prisma.booking.create({
       data: {
-        ...dto,
+        customerId: dto.customerId,
+        guestName: dto.guestName,
+        guestPhone: dto.guestPhone,
+        tableId: dto.tableId,
+        reservedAt: new Date(dto.reservedAt),
+        partySize: dto.partySize,
         status: dto.status ?? BookingStatus.BOOKED,
+        notes: dto.notes,
       },
     });
 
@@ -141,7 +145,16 @@ export class BookingsService {
 
     const updated = await this.prisma.booking.update({
       where: { id },
-      data: dto,
+      data: {
+        customerId: dto.customerId,
+        guestName: dto.guestName,
+        guestPhone: dto.guestPhone,
+        tableId: dto.tableId,
+        reservedAt: dto.reservedAt !== undefined ? new Date(dto.reservedAt) : undefined,
+        partySize: dto.partySize,
+        status: dto.status,
+        notes: dto.notes,
+      },
     });
 
     // If tableId changed, update status for both old and new tables

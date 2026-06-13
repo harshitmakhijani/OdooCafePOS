@@ -9,6 +9,7 @@ import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { CreateFloorDto } from './dto/create-floor.dto';
 import { UpdateFloorDto } from './dto/update-floor.dto';
 import { TableStatus, BookingStatus, OrderStatus } from '@cafe-pos/types';
+import { Paginated } from '../common/interceptors/response.interceptor';
 
 @Injectable()
 export class FloorsService {
@@ -78,15 +79,13 @@ export class FloorsService {
       }),
     }));
 
-    return {
-      data,
-      meta: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    };
+    // Return via Paginated so the interceptor wraps once → { data, meta }.
+    return new Paginated(data, {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    });
   }
 
   /** Create a new floor (PRD §13.7 / §8.6). */
@@ -105,29 +104,17 @@ export class FloorsService {
    * non-cancelled orders — prevents referential integrity issues.
    */
   async remove(id: string) {
-    const floor = await this.prisma.floor.findUnique({
-      where: { id },
-      include: {
-        tables: {
-          include: {
-            orders: {
-              where: { status: { not: OrderStatus.CANCELLED } },
-              select: { id: true },
-              take: 1,
-            },
-          },
-        },
-      },
+    await this.ensureExists(id);
+
+    // Order.tableId has no cascade, so a table referenced by ANY order
+    // (including CANCELLED) would raise P2003 on delete. Block the delete
+    // if any order references any table under this floor.
+    const orderCount = await this.prisma.order.count({
+      where: { table: { floorId: id } },
     });
-
-    if (!floor) {
-      throw new NotFoundException(`Floor ${id} not found`);
-    }
-
-    const hasActiveOrders = floor.tables.some((t) => t.orders.length > 0);
-    if (hasActiveOrders) {
+    if (orderCount > 0) {
       throw new ConflictException(
-        'Cannot delete floor: one or more tables have active orders. Archive or remove the tables first.',
+        'Cannot delete a floor whose tables have order history; deactivate the tables instead',
       );
     }
 

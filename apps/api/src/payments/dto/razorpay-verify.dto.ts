@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class RazorpayVerifyDto {
   @ApiProperty()
@@ -16,4 +16,10 @@ export class RazorpayVerifyDto {
   @IsString()
   @IsNotEmpty()
   razorpay_signature!: string;
+
+  /** The method Razorpay Checkout reported (e.g. 'card' | 'upi' | 'netbanking'). */
+  @ApiPropertyOptional({ enum: ['card', 'upi', 'netbanking', 'wallet'] })
+  @IsOptional()
+  @IsIn(['card', 'upi', 'netbanking', 'wallet'])
+  method?: string;
 }

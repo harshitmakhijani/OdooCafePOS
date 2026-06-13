@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsString,
   Min,
+  ValidateIf,
 } from 'class-validator';
 import { BookingStatus } from '@cafe-pos/types';
 
@@ -16,9 +17,11 @@ export class CreateBookingDto {
   @IsString()
   customerId?: string;
 
+  // A booking is for an existing customer OR a guest (name required) — PRD §8.8.
   @ApiPropertyOptional()
-  @IsOptional()
+  @ValidateIf((o) => !o.customerId)
   @IsString()
+  @IsNotEmpty()
   guestName?: string;
 
   @ApiPropertyOptional()

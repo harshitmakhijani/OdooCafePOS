@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { configuration } from './config/configuration';
 import { validateEnv } from './config/env.validation';
@@ -39,6 +40,9 @@ import { ReportsModule } from './reports/reports.module';
       validate: validateEnv,
       envFilePath: ['.env', '../../.env'],
     }),
+    // Global rate limit (generous default); auth routes apply a tighter @Throttle
+    // to blunt brute-force / credential stuffing (PRD §16.1).
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 300 }]),
     // Infrastructure
     PrismaModule,
     RealtimeModule,
@@ -62,7 +66,8 @@ import { ReportsModule } from './reports/reports.module';
     ReportsModule,
   ],
   providers: [
-    // Global auth → role order matters: authenticate first, then authorize.
+    // Guard order: rate-limit first, then authenticate, then authorize.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

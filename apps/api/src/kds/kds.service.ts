@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { KdsQueryDto } from './dto/kds-query.dto';
 import { KdsStage } from '@cafe-pos/types';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { Paginated } from '../common/interceptors/response.interceptor';
 
 @Injectable()
 export class KdsService {
@@ -20,26 +21,25 @@ export class KdsService {
     const { search, page, pageSize, stage, productId, categoryId } = query;
     const skip = (page - 1) * pageSize;
 
+    // A ticket must have at least one KDS-visible line; product/category filters
+    // compose into that same predicate (so passing both no longer overwrites the
+    // other), and showOnKds is enforced at the ORDER level so all-hidden orders
+    // never appear and the count stays accurate (PRD §7.6/§10/§13.13).
+    const lineFilter: Prisma.OrderLineWhereInput = {
+      product: {
+        showOnKds: true,
+        ...(categoryId ? { categoryId } : {}),
+      },
+      ...(productId ? { productId } : {}),
+    };
+
     const where: Prisma.OrderWhereInput = {
       // By default, only show active KDS tickets (exclude NONE)
       kdsStage: stage ?? {
         in: [KdsStage.TO_COOK, KdsStage.PREPARING],
       },
+      lines: { some: lineFilter },
     };
-
-    if (productId) {
-      where.lines = {
-        some: { productId },
-      };
-    }
-
-    if (categoryId) {
-      where.lines = {
-        some: {
-          product: { categoryId },
-        },
-      };
-    }
 
     if (search) {
       const searchNum = parseInt(search, 10);
@@ -77,15 +77,14 @@ export class KdsService {
       })),
     }));
 
-    return {
-      data: tickets,
-      meta: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    };
+    // Return via Paginated so the global interceptor wraps once → { data, meta }.
+    // (Returning a bare { data, meta } here would be double-wrapped.)
+    return new Paginated(tickets, {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    });
   }
 
   async advance(orderId: string) {

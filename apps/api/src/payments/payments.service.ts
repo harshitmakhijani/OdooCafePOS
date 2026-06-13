@@ -4,6 +4,7 @@ import {
   ConflictException,
   BadRequestException,
   BadGatewayException,
+  ServiceUnavailableException,
   OnModuleInit,
   OnModuleDestroy,
 } from '@nestjs/common';
@@ -13,10 +14,22 @@ import * as nodemailer from 'nodemailer';
 import puppeteer, { Browser } from 'puppeteer';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrdersService } from '../orders/orders.service';
-import { CashPaymentDto } from './dto/cash-payment.dto';
 import { RazorpayVerifyDto } from './dto/razorpay-verify.dto';
 import { EmailReceiptDto } from './dto/email-receipt.dto';
 import { PaymentStatus, PaymentType, OrderStatus } from '@cafe-pos/types';
+
+/**
+ * Constant-time comparison of two hex signatures. Returns false on length
+ * mismatch instead of throwing (PRD §16.1 — webhook/signature verification).
+ */
+function safeSignatureEqual(expectedHex: string, actualHex: string): boolean {
+  const expected = Buffer.from(expectedHex, 'utf-8');
+  const actual = Buffer.from(actualHex, 'utf-8');
+  if (expected.length !== actual.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(expected, actual);
+}
 
 @Injectable()
 export class PaymentsService implements OnModuleInit, OnModuleDestroy {
@@ -44,56 +57,6 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     if (this.browser) {
       await this.browser.close();
     }
-  }
-
-  async payCash(id: string, dto: CashPaymentDto) {
-    const order = await this.prisma.order.findUnique({
-      where: { id },
-    });
-    if (!order) {
-      throw new NotFoundException(`Order ${id} not found`);
-    }
-
-    if (order.status !== OrderStatus.DRAFT) {
-      throw new ConflictException('Order is not in DRAFT status');
-    }
-
-    const total = Number(order.total);
-    if (dto.cashReceived < total) {
-      throw new ConflictException(
-        `Cash received (₹${dto.cashReceived}) is less than order total (₹${total})`,
-      );
-    }
-
-    const changeDue = dto.cashReceived - total;
-
-    const payment = await this.prisma.payment.upsert({
-      where: { orderId: id },
-      update: {
-        type: PaymentType.CASH,
-        status: PaymentStatus.SUCCESS,
-        amount: order.total,
-        cashReceived: dto.cashReceived,
-        changeDue: changeDue,
-        reference: 'Cash',
-      },
-      create: {
-        orderId: id,
-        type: PaymentType.CASH,
-        status: PaymentStatus.SUCCESS,
-        amount: order.total,
-        cashReceived: dto.cashReceived,
-        changeDue: changeDue,
-        reference: 'Cash',
-      },
-    });
-
-    await this.ordersService.markPaid(id);
-
-    return {
-      payment,
-      changeDue,
-    };
   }
 
   async razorpayCreate(id: string) {
@@ -184,40 +147,44 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       return order.payment;
     }
 
+    // The Razorpay order id is established SERVER-SIDE by razorpayCreate and stored
+    // on the payment record. Never trust the client to tell us whether a payment is
+    // a mock — derive it from the stored value, and require the submitted order id
+    // to match it (prevents the "order_mock_" / cross-order bypass — PRD §15.1/§16.1).
+    const storedRzpOrderId = order.payment?.razorpayOrderId ?? null;
+    if (!storedRzpOrderId) {
+      throw new BadRequestException('No Razorpay order has been created for this order');
+    }
+    if (storedRzpOrderId !== dto.razorpay_order_id) {
+      throw new BadRequestException('Razorpay order id does not match this order');
+    }
+
     const keySecret = this.config.get<string>('razorpay.keySecret');
+    // A mock order only exists when Razorpay is NOT configured (see razorpayCreate).
+    const isMockOrder = storedRzpOrderId.startsWith('order_mock_');
 
-    // Crytographic verification only if not a mock order
-    if (!dto.razorpay_order_id.startsWith('order_mock_') && keySecret) {
+    if (!isMockOrder) {
+      // Real payment → signature verification is MANDATORY (no skip path).
+      if (!keySecret) {
+        throw new ServiceUnavailableException(
+          'Razorpay is not configured (missing key secret); cannot verify payment',
+        );
+      }
       const text = `${dto.razorpay_order_id}|${dto.razorpay_payment_id}`;
-      const expectedSignature = crypto
-        .createHmac('sha256', keySecret)
-        .update(text)
-        .digest('hex');
-
-      const expectedBuffer = Buffer.from(expectedSignature, 'utf-8');
-      const actualBuffer = Buffer.from(dto.razorpay_signature, 'utf-8');
-
-      if (
-        expectedBuffer.length !== actualBuffer.length ||
-        !crypto.timingSafeEqual(expectedBuffer, actualBuffer)
-      ) {
+      const expectedSignature = crypto.createHmac('sha256', keySecret).update(text).digest('hex');
+      if (!safeSignatureEqual(expectedSignature, dto.razorpay_signature)) {
         throw new BadRequestException('Invalid Razorpay signature');
       }
     }
 
-    const payment = await this.prisma.payment.upsert({
+    // Record the actual instrument (UPI vs CARD) reported by Checkout (PRD §9.6).
+    const paymentType = dto.method === 'upi' ? PaymentType.UPI : PaymentType.CARD;
+
+    const payment = await this.prisma.payment.update({
       where: { orderId: id },
-      update: {
+      data: {
+        type: paymentType,
         status: PaymentStatus.SUCCESS,
-        reference: dto.razorpay_payment_id,
-        razorpaySignature: dto.razorpay_signature,
-      },
-      create: {
-        orderId: id,
-        type: PaymentType.CARD,
-        status: PaymentStatus.SUCCESS,
-        amount: order.total,
-        razorpayOrderId: dto.razorpay_order_id,
         reference: dto.razorpay_payment_id,
         razorpaySignature: dto.razorpay_signature,
       },
@@ -235,26 +202,40 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('Missing webhook request body');
     }
 
-    // Verify signature if webhook secret is configured
-    if (webhookSecret && signature) {
-      const bodyBuffer = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody);
-      const expectedSignature = crypto
-        .createHmac('sha256', webhookSecret)
-        .update(bodyBuffer)
-        .digest('hex');
-
-      if (expectedSignature !== signature) {
-        throw new BadRequestException('Invalid webhook signature');
-      }
+    // Signature verification is MANDATORY. If the webhook secret is not configured,
+    // refuse to mutate any payment state from an unverifiable request (PRD §15.1/§16.1)
+    // rather than trusting an unsigned body. Ack so Razorpay does not retry forever.
+    if (!webhookSecret) {
+      // eslint-disable-next-line no-console
+      console.warn('[razorpay webhook] RAZORPAY_WEBHOOK_SECRET not configured; ignoring webhook');
+      return { received: true, processed: false };
+    }
+    if (!signature) {
+      throw new BadRequestException('Missing webhook signature');
     }
 
-    const bodyStr = Buffer.isBuffer(rawBody) ? rawBody.toString('utf-8') : rawBody;
-    const payload = typeof bodyStr === 'string' ? JSON.parse(bodyStr) : bodyStr;
+    const bodyBuffer = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody);
+    const expectedSignature = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(bodyBuffer)
+      .digest('hex');
+    if (!safeSignatureEqual(expectedSignature, signature)) {
+      throw new BadRequestException('Invalid webhook signature');
+    }
 
-    if (payload?.event === 'payment.captured') {
-      const paymentEntity = payload.payload.payment.entity;
-      const rpOrderId = paymentEntity.order_id;
-      const rpPaymentId = paymentEntity.id;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let payload: any;
+    try {
+      payload = JSON.parse(bodyBuffer.toString('utf-8'));
+    } catch {
+      throw new BadRequestException('Malformed webhook body');
+    }
+
+    // Defensive: only act on a well-formed payment.captured event (PRD §16.4).
+    const entity = payload?.payload?.payment?.entity;
+    if (payload?.event === 'payment.captured' && entity?.order_id) {
+      const rpOrderId: string = entity.order_id;
+      const rpPaymentId: string | undefined = entity.id;
 
       const payment = await this.prisma.payment.findFirst({
         where: { razorpayOrderId: rpOrderId },
@@ -265,12 +246,14 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
           where: { id: payment.orderId },
         });
 
+        // Idempotent: skip if already PAID (a payment may be confirmed by both
+        // the verify call and this webhook — PRD §15.1).
         if (order && order.status !== OrderStatus.PAID) {
           await this.prisma.payment.update({
             where: { id: payment.id },
             data: {
               status: PaymentStatus.SUCCESS,
-              reference: rpPaymentId,
+              reference: rpPaymentId ?? payment.reference,
             },
           });
           await this.ordersService.markPaid(payment.orderId);

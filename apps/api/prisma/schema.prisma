@@ -23,17 +23,32 @@ enum UserStatus {
 }
 
 model User {
-  id           String     @id @default(cuid())
-  name         String
-  username     String     @unique
-  email        String     @unique
-  passwordHash     String
-  refreshTokenHash String?   // hashed refresh token for rotation + invalidation (PRD §8.1)
-  role             Role
-  status           UserStatus @default(ACTIVE)
-  sessions     Session[]
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id            String         @id @default(cuid())
+  name          String
+  username      String         @unique
+  email         String         @unique
+  passwordHash  String
+  role          Role
+  status        UserStatus     @default(ACTIVE)
+  sessions      Session[]
+  refreshTokens RefreshToken[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+// One row per issued refresh token (per device/session) so logins on multiple
+// terminals don't invalidate each other, and rotation/reuse-detection is
+// per-token (PRD §7.4 multi-terminal, §16.1 rotation).
+model RefreshToken {
+  id        String    @id @default(cuid()) // also embedded as the JWT `jti`
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String // bcrypt hash of the issued refresh token
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 // ---------- Catalog ----------

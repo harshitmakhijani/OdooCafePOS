@@ -46,14 +46,28 @@ export class ExportService implements OnModuleInit, OnModuleDestroy {
   private browser!: Browser;
 
   async onModuleInit() {
-    this.browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    // Don't let a Chromium launch failure crash app boot (e.g. no bundled browser
+    // on a fresh machine / CI). Lazy-launch on first PDF request instead.
+    try {
+      this.browser = await this.launchBrowser();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        'ExportService: Puppeteer launch failed at init, will retry when a PDF is requested:',
+        (err as Error).message,
+      );
+    }
   }
 
   async onModuleDestroy() {
     await this.browser?.close();
+  }
+
+  private launchBrowser(): Promise<Browser> {
+    return puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
   }
 
   // ── Excel (XLS) export via ExcelJS ─────────────────────────────────
@@ -163,6 +177,9 @@ export class ExportService implements OnModuleInit, OnModuleDestroy {
   // ── PDF export via Puppeteer ───────────────────────────────────────
   async toPdf(data: ReportDataset): Promise<Buffer> {
     const html = this.buildReportHtml(data);
+    if (!this.browser) {
+      this.browser = await this.launchBrowser();
+    }
     const page = await this.browser.newPage();
     try {
       await page.setContent(html, { waitUntil: 'domcontentloaded' });

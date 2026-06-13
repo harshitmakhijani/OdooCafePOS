@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import type { Response } from 'express';
 import type { ErrorEnvelope } from '@cafe-pos/types';
 
@@ -45,6 +46,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
           code = String(body.error).toUpperCase().replace(/\s+/g, '_');
         }
       }
+    } else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+      // Map common Prisma errors to proper HTTP statuses instead of a raw 500 (PRD §16.4).
+      const mapped = this.mapPrismaError(exception);
+      status = mapped.status;
+      code = this.codeForStatus(status);
+      message = mapped.message;
     } else if (exception instanceof Error) {
       message = exception.message;
     }
@@ -57,6 +64,32 @@ export class AllExceptionsFilter implements ExceptionFilter {
       error: { code, message, ...(details ? { details } : {}) },
     };
     response.status(status).json(envelope);
+  }
+
+  private mapPrismaError(err: Prisma.PrismaClientKnownRequestError): {
+    status: number;
+    message: string;
+  } {
+    switch (err.code) {
+      case 'P2002': {
+        const target = (err.meta?.target as string[] | undefined)?.join(', ');
+        return {
+          status: HttpStatus.CONFLICT,
+          message: target
+            ? `A record with this ${target} already exists`
+            : 'Unique constraint violation',
+        };
+      }
+      case 'P2025':
+        return { status: HttpStatus.NOT_FOUND, message: 'Record not found' };
+      case 'P2003':
+        return {
+          status: HttpStatus.CONFLICT,
+          message: 'Operation violates a relation constraint (record is still referenced)',
+        };
+      default:
+        return { status: HttpStatus.BAD_REQUEST, message: 'Database request error' };
+    }
   }
 
   private codeForStatus(status: number): string {

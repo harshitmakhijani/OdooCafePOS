@@ -10,7 +10,8 @@ import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
-import { UserStatus } from '@cafe-pos/types';
+import { Role, UserStatus } from '@cafe-pos/types';
+import { Paginated } from '../common/interceptors/response.interceptor';
 
 @Injectable()
 export class UsersService {
@@ -40,15 +41,15 @@ export class UsersService {
       this.prisma.user.count({ where }),
     ]);
 
-    return {
-      data: users.map((u) => this.sanitizeUser(u)),
-      meta: {
+    return new Paginated(
+      users.map((u) => this.sanitizeUser(u)),
+      {
         page,
         pageSize,
         total,
         totalPages: Math.ceil(total / pageSize),
       },
-    };
+    );
   }
 
   async create(dto: CreateUserDto) {
@@ -84,7 +85,12 @@ export class UsersService {
   }
 
   async update(id: string, dto: UpdateUserDto) {
-    const _user = await this.ensureExists(id);
+    const user = await this.ensureExists(id);
+
+    // Guard against demoting the last active admin (PRD §13.6).
+    if (dto.role !== undefined && dto.role !== Role.ADMIN) {
+      await this.assertNotLastActiveAdmin(user);
+    }
 
     // If changing email/username, check uniqueness
     if (dto.email || dto.username) {
@@ -132,7 +138,10 @@ export class UsersService {
   }
 
   async archive(id: string) {
-    await this.ensureExists(id);
+    const user = await this.ensureExists(id);
+
+    // Cannot archive the last active admin (PRD §13.6).
+    await this.assertNotLastActiveAdmin(user);
 
     const updated = await this.prisma.user.update({
       where: { id },
@@ -143,7 +152,10 @@ export class UsersService {
   }
 
   async remove(id: string) {
-    await this.ensureExists(id);
+    const user = await this.ensureExists(id);
+
+    // Cannot delete the last active admin (PRD §13.6).
+    await this.assertNotLastActiveAdmin(user);
 
     // Check if user is referenced by any sessions
     const sessionCount = await this.prisma.session.count({
@@ -173,6 +185,24 @@ export class UsersService {
       throw new NotFoundException(`User ${id} not found`);
     }
     return user;
+  }
+
+  /**
+   * Throws if removing/deactivating/demoting the given user would leave zero
+   * active admins. No-op when the user is not currently an active admin.
+   */
+  private async assertNotLastActiveAdmin(user: { role: string; status: string }) {
+    if (user.role !== Role.ADMIN || user.status !== UserStatus.ACTIVE) {
+      return;
+    }
+
+    const activeAdmins = await this.prisma.user.count({
+      where: { role: Role.ADMIN, status: UserStatus.ACTIVE },
+    });
+
+    if (activeAdmins <= 1) {
+      throw new ConflictException('Cannot remove or deactivate the last active admin');
+    }
   }
 
   private sanitizeUser(user: Record<string, unknown>) {

@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { JwtAccessPayload } from '@cafe-pos/types';
 import { Public } from '../common/decorators/public.decorator';
@@ -15,6 +16,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
   @Post('signup')
   @ApiOperation({ summary: 'Create an account (PRD §13.1)' })
   signup(@Body() dto: SignupDto) {
@@ -22,6 +24,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
   @Post('login')
   @ApiOperation({ summary: 'Login with email or username (PRD §13.1)' })
   login(@Body() dto: LoginDto) {
@@ -29,6 +32,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
   @Post('refresh')
   @UseGuards(AuthGuard('jwt-refresh'))
   @ApiOperation({ summary: 'Exchange a refresh token for a new access token (PRD §13.1)' })

@@ -4,6 +4,7 @@ import {
   ConflictException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { CreatePromotionDto } from './dto/create-promotion.dto';
@@ -45,31 +46,36 @@ export class PromotionsService {
     // Validate conditional rules (PRD §8.5)
     this.validatePromotionRules(dto);
 
-    // COUPON code uniqueness
-    if (dto.type === 'COUPON' && dto.code) {
+    // Code uniqueness — `Promotion.code` is @unique for any type, so check
+    // whenever a code is supplied (not only COUPONs) to avoid a P2002 → 500.
+    if (dto.code) {
       const existing = await this.prisma.promotion.findUnique({
         where: { code: dto.code },
       });
       if (existing) {
-        throw new ConflictException(`Coupon code "${dto.code}" is already in use`);
+        throw new ConflictException('A promotion with this code already exists');
       }
     }
 
-    return this.prisma.promotion.create({
-      data: {
-        name: dto.name,
-        type: dto.type,
-        code: dto.code,
-        scope: dto.scope ?? 'ORDER',
-        productId: dto.productId,
-        minQuantity: dto.minQuantity,
-        minOrderAmount: dto.minOrderAmount,
-        discountType: dto.discountType,
-        discountValue: dto.discountValue,
-        active: dto.active ?? true,
-        description: dto.description,
-      },
-    });
+    try {
+      return await this.prisma.promotion.create({
+        data: {
+          name: dto.name,
+          type: dto.type,
+          code: dto.code,
+          scope: dto.scope ?? 'ORDER',
+          productId: dto.productId,
+          minQuantity: dto.minQuantity,
+          minOrderAmount: dto.minOrderAmount,
+          discountType: dto.discountType,
+          discountValue: dto.discountValue,
+          active: dto.active ?? true,
+          description: dto.description,
+        },
+      });
+    } catch (err) {
+      throw this.mapPrismaError(err);
+    }
   }
 
   async update(id: string, dto: UpdatePromotionDto) {
@@ -77,15 +83,19 @@ export class PromotionsService {
     const merged = { ...existing, ...dto };
     this.validatePromotionRules(merged as CreatePromotionDto);
 
-    // Check code uniqueness on update
+    // Check code uniqueness on update whenever a code is being set/changed.
     if (dto.code && dto.code !== existing.code) {
       const dup = await this.prisma.promotion.findUnique({ where: { code: dto.code } });
       if (dup && dup.id !== id) {
-        throw new ConflictException(`Coupon code "${dto.code}" is already in use`);
+        throw new ConflictException('A promotion with this code already exists');
       }
     }
 
-    return this.prisma.promotion.update({ where: { id }, data: dto });
+    try {
+      return await this.prisma.promotion.update({ where: { id }, data: dto });
+    } catch (err) {
+      throw this.mapPrismaError(err);
+    }
   }
 
   async remove(id: string) {
@@ -94,9 +104,25 @@ export class PromotionsService {
   }
 
   /**
-   * POST /promotions/validate-coupon — returns a discount preview without persisting.
+   * POST /promotions/validate-coupon — validates the coupon against a given
+   * order and returns the computed discount preview without persisting
+   * (PRD §13.6).
    */
   async validateCoupon(dto: ValidateCouponDto) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: dto.orderId },
+      include: { lines: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order ${dto.orderId} not found`);
+    }
+
+    const subtotal = order.lines.reduce(
+      (acc, line) => acc.add(line.lineTotal),
+      new Prisma.Decimal(0),
+    );
+
     const promo = await this.prisma.promotion.findFirst({
       where: {
         code: dto.code,
@@ -106,15 +132,21 @@ export class PromotionsService {
     });
 
     if (!promo) {
-      throw new NotFoundException('Invalid or inactive coupon code');
+      throw new UnprocessableEntityException('Invalid or inactive coupon code');
     }
 
+    const discountAmount =
+      promo.discountType === 'PERCENTAGE'
+        ? subtotal.mul(promo.discountValue).div(100).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+        : Prisma.Decimal.min(promo.discountValue, subtotal);
+
     return {
-      promotionId: promo.id,
-      name: promo.name,
+      valid: true,
+      code: promo.code,
       discountType: promo.discountType,
       discountValue: promo.discountValue,
-      description: promo.description,
+      subtotal,
+      discountAmount,
     };
   }
 
@@ -153,5 +185,13 @@ export class PromotionsService {
     const promo = await this.prisma.promotion.findUnique({ where: { id } });
     if (!promo) throw new NotFoundException('Promotion not found');
     return promo;
+  }
+
+  /** Maps a Prisma unique-constraint violation (P2002) to a ConflictException. */
+  private mapPrismaError(err: unknown): unknown {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      return new ConflictException('A promotion with this code already exists');
+    }
+    return err;
   }
 }

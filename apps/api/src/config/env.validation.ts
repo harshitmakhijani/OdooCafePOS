@@ -108,5 +108,26 @@ export function validateEnv(config: Record<string, unknown>): EnvironmentVariabl
     throw new Error(`Invalid environment configuration: ${details}`);
   }
 
+  // In production, integration secrets must be present — empty secrets would
+  // otherwise silently disable Razorpay signature / webhook verification and
+  // SMTP auth (PRD §15.1, §16.1). In dev they may stay empty (mock flows).
+  if (validated.NODE_ENV === NodeEnv.production) {
+    const requiredInProd: (keyof EnvironmentVariables)[] = [
+      'RAZORPAY_KEY_ID',
+      'RAZORPAY_KEY_SECRET',
+      'RAZORPAY_WEBHOOK_SECRET',
+      'SMTP_HOST',
+      'SMTP_USER',
+      'SMTP_PASS',
+    ];
+    const missing = requiredInProd.filter((k) => !validated[k]);
+    if (missing.length > 0) {
+      throw new Error(
+        `Missing required production secrets: ${missing.join(', ')}. ` +
+          `Set them in the environment (PRD §15, §16.1).`,
+      );
+    }
+  }
+
   return validated;
 }

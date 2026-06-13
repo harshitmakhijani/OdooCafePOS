@@ -4,7 +4,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import { PaymentMethodQueryDto } from './dto/payment-method-query.dto';
 import { CreatePaymentMethodDto } from './dto/create-payment-method.dto';
 import { UpdatePaymentMethodDto } from './dto/update-payment-method.dto';
 import { Paginated } from '../common/interceptors/response.interceptor';
@@ -13,10 +13,11 @@ import { Paginated } from '../common/interceptors/response.interceptor';
 export class PaymentMethodsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(query: PaginationQueryDto) {
+  async findAll(query: PaymentMethodQueryDto) {
     const { page, pageSize, search } = query;
     const where = {
       ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {}),
+      ...(query.active !== undefined ? { active: query.active } : {}),
     };
 
     const [items, total] = await Promise.all([

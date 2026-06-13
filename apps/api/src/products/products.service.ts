@@ -66,12 +66,10 @@ export class ProductsService {
   async remove(id: string) {
     await this.ensureExists(id);
 
-    // Check if referenced by non-draft order
+    // Check if referenced by ANY order line (any order status). Order lines
+    // have no cascade, so deleting a referenced product raises P2003 → 500.
     const referenced = await this.prisma.orderLine.findFirst({
-      where: {
-        productId: id,
-        order: { status: { not: 'DRAFT' } },
-      },
+      where: { productId: id },
     });
 
     if (referenced) {

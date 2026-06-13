@@ -20,17 +20,39 @@ import {
 } from '@cafe-pos/types';
 
 /**
+ * Resolve the allowed CORS origins from env at call time. ConfigModule loads the
+ * .env into process.env during bootstrap (before any socket connects), so the
+ * allowlist is available here without the decorator needing DI.
+ */
+function allowedOrigins(): string[] {
+  return (process.env.CORS_ORIGINS ?? 'http://localhost:5173')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+}
+
+/**
  * Socket.IO gateway (PRD §14). Authenticates the handshake with the access
  * token, joins clients into `kitchen` / `floor` rooms by role, and exposes
  * typed `emit*` helpers that domain services call after a successful REST
  * mutation. Clients are broadcast targets only — they never mutate over the
- * socket.
- *
- * NOTE (scaffold): the emit helpers are wired and ready; the business triggers
- * that call them live in the order/kds/payment services — see those TODOs.
+ * socket. CORS is restricted to the configured app origin(s) (PRD §16.1).
  */
 @WebSocketGateway({
-  cors: { origin: true, credentials: true },
+  cors: {
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
+      // Allow non-browser clients (no Origin header) and allowlisted origins only.
+      if (!origin || allowedOrigins().includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Origin not allowed by CORS'), false);
+      }
+    },
+    credentials: true,
+  },
 })
 export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(RealtimeGateway.name);
