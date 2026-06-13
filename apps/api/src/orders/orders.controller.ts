@@ -1,18 +1,26 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Role } from '@cafe-pos/types';
+import type { JwtAccessPayload } from '@cafe-pos/types';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { OrdersService } from './orders.service';
 import { OrderQueryDto } from './dto/order-query.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { ApplyCouponDto } from './dto/apply-coupon.dto';
+import { CashPaymentDto } from '../payments/dto/cash-payment.dto';
+import { PrismaService } from '../prisma/prisma.service';
+import { UnprocessableEntityException } from '@nestjs/common';
 
 @ApiTags('orders')
 @ApiBearerAuth()
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get()
   @Roles(Role.CASHIER)
@@ -31,8 +39,15 @@ export class OrdersController {
   @Post()
   @Roles(Role.CASHIER)
   @ApiOperation({ summary: 'Create DRAFT for a table (PRD §13.10)' })
-  create(@Body() dto: CreateOrderDto) {
-    return this.ordersService.create(dto);
+  async create(@Body() dto: CreateOrderDto, @CurrentUser() user: JwtAccessPayload) {
+    // Find the caller's current open session
+    const session = await this.prisma.session.findFirst({
+      where: { employeeId: user.sub, status: 'OPEN' },
+    });
+    if (!session) {
+      throw new UnprocessableEntityException('No open session. Please open a session first.');
+    }
+    return this.ordersService.create(dto, session.id);
   }
 
   @Patch(':id')
@@ -61,6 +76,13 @@ export class OrdersController {
   @ApiOperation({ summary: 'Set kdsStage=TO_COOK, emit (PRD §13.10 / §7.6)' })
   sendToKitchen(@Param('id') id: string) {
     return this.ordersService.sendToKitchen(id);
+  }
+
+  @Post(':id/pay/cash')
+  @Roles(Role.CASHIER)
+  @ApiOperation({ summary: 'Cash payment (PRD §13.11)' })
+  payCash(@Param('id') id: string, @Body() dto: CashPaymentDto) {
+    return this.ordersService.payCash(id, dto.cashReceived);
   }
 
   @Delete(':id')

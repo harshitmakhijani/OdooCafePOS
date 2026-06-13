@@ -27,9 +27,10 @@ model User {
   name         String
   username     String     @unique
   email        String     @unique
-  passwordHash String
-  role         Role
-  status       UserStatus @default(ACTIVE)
+  passwordHash     String
+  refreshTokenHash String?   // hashed refresh token for rotation + invalidation (PRD §8.1)
+  role             Role
+  status           UserStatus @default(ACTIVE)
   sessions     Session[]
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt

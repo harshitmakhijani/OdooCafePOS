@@ -32,8 +32,12 @@ export class AuthController {
   @Post('refresh')
   @UseGuards(AuthGuard('jwt-refresh'))
   @ApiOperation({ summary: 'Exchange a refresh token for a new access token (PRD §13.1)' })
-  refresh(@Body() _dto: RefreshDto, @CurrentUser('sub') userId: string) {
-    return this.authService.refresh(userId);
+  refresh(
+    @Body() dto: RefreshDto,
+    @CurrentUser() user: JwtAccessPayload & { refreshToken?: string },
+  ) {
+    // The JwtRefreshStrategy attaches the raw refreshToken on the user payload
+    return this.authService.refresh(user.sub, dto.refreshToken);
   }
 
   @Post('logout')

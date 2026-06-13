@@ -1,30 +1,69 @@
-import { Injectable, NotImplementedException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { Paginated } from '../common/interceptors/response.interceptor';
 
 @Injectable()
 export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(_query: PaginationQueryDto) {
-    // TODO(PRD §13.3 / §8.3): list categories (paginated, searchable).
-    throw new NotImplementedException('categories.findAll not implemented');
+  async findAll(query: PaginationQueryDto) {
+    const { page, pageSize, search } = query;
+    const where = {
+      archived: false,
+      ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {}),
+    };
+
+    const [items, total] = await Promise.all([
+      this.prisma.category.findMany({
+        where,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: { name: 'asc' },
+        include: { _count: { select: { products: true } } },
+      }),
+      this.prisma.category.count({ where }),
+    ]);
+
+    return new Paginated(items, { page, pageSize, total, totalPages: Math.ceil(total / pageSize) });
   }
 
-  async create(_dto: CreateCategoryDto) {
-    // TODO(PRD §13.3 / §8.3): create a category (name, color).
-    throw new NotImplementedException('categories.create not implemented');
+  async create(dto: CreateCategoryDto) {
+    return this.prisma.category.create({ data: dto });
   }
 
-  async update(_id: string, _dto: UpdateCategoryDto) {
-    // TODO(PRD §13.3 / §8.3): update a category; color edits propagate by reference.
-    throw new NotImplementedException('categories.update not implemented');
+  async update(id: string, dto: UpdateCategoryDto) {
+    await this.ensureExists(id);
+    return this.prisma.category.update({ where: { id }, data: dto });
   }
 
-  async remove(_id: string) {
-    // TODO(PRD §13.3 / §6): delete, or archive instead if referenced by orders.
-    throw new NotImplementedException('categories.remove not implemented');
+  async remove(id: string) {
+    await this.ensureExists(id);
+
+    // Check if referenced by a non-draft order (via products → orderLines → order)
+    const referenced = await this.prisma.orderLine.findFirst({
+      where: {
+        product: { categoryId: id },
+        order: { status: { not: 'DRAFT' } },
+      },
+    });
+
+    if (referenced) {
+      // Archive instead of delete (PRD §6 soft delete)
+      return this.prisma.category.update({
+        where: { id },
+        data: { archived: true },
+      });
+    }
+
+    return this.prisma.category.delete({ where: { id } });
+  }
+
+  private async ensureExists(id: string) {
+    const category = await this.prisma.category.findUnique({ where: { id } });
+    if (!category) throw new NotFoundException('Category not found');
+    return category;
   }
 }
