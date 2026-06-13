@@ -1,0 +1,307 @@
+// Cafe POS — Prisma schema (authoritative data model, PRD §6).
+// All monetary fields are Decimal (never float). All timestamps are UTC.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Identity ----------
+enum Role {
+  ADMIN
+  CASHIER
+  KITCHEN
+}
+
+enum UserStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  username     String     @unique
+  email        String     @unique
+  passwordHash String
+  role         Role
+  status       UserStatus @default(ACTIVE)
+  sessions     Session[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+// ---------- Catalog ----------
+model Category {
+  id        String    @id @default(cuid())
+  name      String
+  color     String // hex, e.g. "#F59E0B"
+  archived  Boolean   @default(false)
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+enum TaxRate {
+  GST_5
+  GST_10
+  GST_18
+  GST_28
+} // stored as the numeric % in `taxPercent`
+
+model Product {
+  id            String      @id @default(cuid())
+  name          String
+  categoryId    String
+  category      Category    @relation(fields: [categoryId], references: [id])
+  price         Decimal     @db.Decimal(10, 2)
+  unitOfMeasure String // display only: "piece", "kg", "litre"
+  taxPercent    Decimal     @db.Decimal(5, 2) // 5, 10, 18, 28
+  description   String?
+  showOnKds     Boolean     @default(true)
+  archived      Boolean     @default(false)
+  orderLines    OrderLine[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([categoryId])
+}
+
+// ---------- Payments config ----------
+enum PaymentType {
+  CASH
+  CARD
+  UPI
+}
+
+model PaymentMethod {
+  id        String      @id @default(cuid())
+  name      String
+  type      PaymentType
+  upiId     String? // required when type = UPI
+  active    Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+// ---------- Promotions ----------
+enum PromotionType {
+  COUPON
+  AUTOMATED
+}
+
+enum PromotionScope {
+  ORDER
+  PRODUCT
+} // PRODUCT only valid for AUTOMATED
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+model Promotion {
+  id             String         @id @default(cuid())
+  name           String
+  type           PromotionType
+  code           String?        @unique // required + unique for COUPON
+  scope          PromotionScope @default(ORDER)
+  productId      String? // required when scope = PRODUCT
+  minQuantity    Int? // required when scope = PRODUCT
+  minOrderAmount Decimal?       @db.Decimal(10, 2) // required when scope = ORDER (automated)
+  discountType   DiscountType
+  discountValue  Decimal        @db.Decimal(10, 2)
+  active         Boolean        @default(true)
+  description    String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([active])
+}
+
+// ---------- Floor plan ----------
+model Floor {
+  id        String   @id @default(cuid())
+  name      String
+  tables    Table[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Table {
+  id          String    @id @default(cuid())
+  floorId     String
+  floor       Floor     @relation(fields: [floorId], references: [id])
+  tableNumber Int
+  seats       Int
+  active      Boolean   @default(true) // admin can deactivate a table
+  orders      Order[]
+  bookings    Booking[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([floorId, tableNumber])
+  @@index([floorId])
+}
+
+// ---------- Customers ----------
+model Customer {
+  id        String    @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  orders    Order[]
+  bookings  Booking[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+// ---------- Registers & Sessions ----------
+model Register {
+  id        String    @id @default(cuid())
+  name      String    @unique // e.g. "Counter 1"
+  active    Boolean   @default(true)
+  sessions  Session[]
+  createdAt DateTime  @default(now())
+}
+
+enum SessionStatus {
+  OPEN
+  CLOSED
+}
+
+model Session {
+  id            String        @id @default(cuid())
+  employeeId    String
+  employee      User          @relation(fields: [employeeId], references: [id])
+  registerId    String
+  register      Register      @relation(fields: [registerId], references: [id])
+  status        SessionStatus @default(OPEN)
+  openedAt      DateTime      @default(now())
+  closedAt      DateTime?
+  closingAmount Decimal?      @db.Decimal(10, 2) // total sales at close
+  orders        Order[]
+  createdAt     DateTime      @default(now())
+
+  @@index([employeeId])
+  @@index([registerId])
+  @@index([status])
+}
+
+// ---------- Orders ----------
+enum OrderStatus {
+  DRAFT
+  PAID
+  CANCELLED
+}
+
+enum KdsStage {
+  NONE
+  TO_COOK
+  PREPARING
+  COMPLETED
+}
+
+model Order {
+  id                 String      @id @default(cuid())
+  orderNumber        Int         @unique @default(autoincrement()) // displayed zero-padded; KDS ticket = this
+  sessionId          String
+  session            Session     @relation(fields: [sessionId], references: [id])
+  tableId            String?
+  table              Table?      @relation(fields: [tableId], references: [id])
+  customerId         String?
+  customer           Customer?   @relation(fields: [customerId], references: [id])
+  status             OrderStatus @default(DRAFT)
+  appliedPromotionId String? // the single discount applied (PRD §7)
+  subtotal           Decimal     @default(0) @db.Decimal(10, 2)
+  discountTotal      Decimal     @default(0) @db.Decimal(10, 2)
+  taxTotal           Decimal     @default(0) @db.Decimal(10, 2)
+  total              Decimal     @default(0) @db.Decimal(10, 2)
+  kdsStage           KdsStage    @default(NONE)
+  sentToKitchenAt    DateTime?
+  lines              OrderLine[]
+  payment            Payment?
+  version            Int         @default(0) // optimistic concurrency (PRD §16)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  @@index([sessionId])
+  @@index([tableId])
+  @@index([customerId])
+  @@index([status])
+  @@index([kdsStage])
+}
+
+model OrderLine {
+  id            String   @id @default(cuid())
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  productName   String // snapshot at time of add
+  quantity      Decimal  @db.Decimal(10, 3)
+  unitPrice     Decimal  @db.Decimal(10, 2) // snapshot
+  taxPercent    Decimal  @db.Decimal(5, 2) // snapshot
+  lineTotal     Decimal  @db.Decimal(10, 2) // unitPrice * quantity (pre-discount/tax)
+  itemCompleted Boolean  @default(false) // KDS item-level strikethrough
+  createdAt     DateTime @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+// ---------- Payment record ----------
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  orderId           String        @unique
+  order             Order         @relation(fields: [orderId], references: [id])
+  type              PaymentType
+  status            PaymentStatus @default(PENDING)
+  amount            Decimal       @db.Decimal(10, 2)
+  cashReceived      Decimal?      @db.Decimal(10, 2) // CASH
+  changeDue         Decimal?      @db.Decimal(10, 2) // CASH
+  reference         String? // card txn ref / razorpay_payment_id
+  razorpayOrderId   String?
+  razorpaySignature String?
+  emailedTo         String?
+  emailedAt         DateTime?
+  createdAt         DateTime      @default(now())
+}
+
+// ---------- Bookings ----------
+enum BookingStatus {
+  BOOKED
+  SEATED
+  CANCELLED
+}
+
+model Booking {
+  id         String        @id @default(cuid())
+  customerId String?
+  customer   Customer?     @relation(fields: [customerId], references: [id])
+  guestName  String? // if no saved customer
+  guestPhone String?
+  tableId    String
+  table      Table         @relation(fields: [tableId], references: [id])
+  reservedAt DateTime
+  partySize  Int
+  status     BookingStatus @default(BOOKED)
+  notes      String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@index([tableId])
+  @@index([customerId])
+  @@index([status])
+  @@index([reservedAt])
+}

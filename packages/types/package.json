@@ -1,0 +1,20 @@
+{
+  "name": "@cafe-pos/types",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared enums and API/Socket.IO contract types for Cafe POS.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "eslint": "^8.57.1",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint-config-prettier": "^9.1.0"
+  }
+}

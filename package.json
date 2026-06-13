@@ -1,0 +1,22 @@
+{
+  "name": "cafe-pos",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Web-based Cafe / Restaurant POS — Admin backend, POS terminal, and Kitchen Display System.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"pnpm --filter @cafe-pos/api start:dev\" \"pnpm --filter @cafe-pos/web dev\"",
+    "build": "pnpm --filter @cafe-pos/types build && pnpm --filter @cafe-pos/api build && pnpm --filter @cafe-pos/web build",
+    "lint": "pnpm -r --if-present lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "db:migrate": "pnpm --filter @cafe-pos/api db:migrate",
+    "db:seed": "pnpm --filter @cafe-pos/api db:seed",
+    "db:reset": "pnpm --filter @cafe-pos/api db:reset"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "prettier": "^3.4.2"
+  }
+}
