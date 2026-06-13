@@ -21,6 +21,7 @@ import { Promotions } from './admin/Promotions';
 import { Bookings } from './admin/Bookings';
 import { Users } from './admin/Users';
 import { Reports } from './admin/Reports';
+import { FloorsAndTables } from './admin/FloorsAndTables';
 
 import { Kds } from './kds/Kds';
 
@@ -61,6 +62,7 @@ export const router = createBrowserRouter([
           { path: '/admin/promotions', element: <Promotions /> },
           { path: '/admin/bookings', element: <Bookings /> },
           { path: '/admin/users', element: <Users /> },
+          { path: '/admin/floors-tables', element: <FloorsAndTables /> },
           { path: '/admin/reports', element: <Reports /> },
         ],
       },

@@ -1,60 +1,383 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 24 95% 53%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 24 95% 53%;
+    /* ── Cafe Palette (Design Prompt §2) ── */
+    --coral: #A67C52;
+    --coral-hover: #8C6843;
+    --coral-soft: #E8DCC8;
+    --coral-foreground: #F5EFE6;
+
+    --bg: #D8C3A5;
+    --surface: #F5EFE6;
+    --surface-2: #E8DCC8;
+    --border-color: #C4AA86;
+    --text: #3A2A1E;
+    --text-muted: #7A624A;
+
+    /* ── Status Colors (always paired with label) ── */
+    --paid: #2E9E5B;
+    --paid-bg: #E6F4EC;
+    --draft: #B6841C;
+    --draft-bg: #FBF1DC;
+    --cancelled: #D64545;
+    --cancelled-bg: #FBE9E9;
+    --info: #2D6CDF;
+    --info-bg: #E8F0FE;
+
+    /* ── Neubrutalism Properties ── */
+    --neo-border: 2px solid #3A2A1E;
+    --neo-border-width: 2px;
+    --neo-border-color: #3A2A1E;
+    --neo-shadow: 4px 4px 0 #3A2A1E;
+    --neo-shadow-sm: 2px 2px 0 #3A2A1E;
+    --neo-shadow-lg: 6px 6px 0 #3A2A1E;
+    --neo-shadow-hover: 2px 2px 0 #3A2A1E;
+    --neo-translate-hover: 2px;
+    --neo-translate-active: 4px;
+
+    /* ── shadcn/ui token mapping (HSL for Tailwind) ── */
+    /* bg: #D8C3A5 → hsl(30, 35%, 74%) */
+    --background: 30 35% 74%;
+    /* surface: #F5EFE6 → hsl(33, 47%, 93%) */
+    --foreground: 24 33% 17%;
+
+    --card: 33 47% 93%;
+    --card-foreground: 24 33% 17%;
+
+    --popover: 33 47% 93%;
+    --popover-foreground: 24 33% 17%;
+
+    /* coral: #A67C52 → hsl(27, 34%, 48%) */
+    --primary: 27 34% 48%;
+    --primary-foreground: 33 47% 93%;
+
+    /* surface-2: #E8DCC8 → hsl(33, 40%, 85%) */
+    --secondary: 33 40% 85%;
+    --secondary-foreground: 24 33% 17%;
+
+    --muted: 33 40% 85%;
+    /* text-muted: #7A624A → hsl(27, 24%, 38%) */
+    --muted-foreground: 27 24% 38%;
+
+    --accent: 33 40% 85%;
+    --accent-foreground: 24 33% 17%;
+
+    /* cancelled: #D64545 */
+    --destructive: 0 64% 55%;
+    --destructive-foreground: 33 47% 93%;
+
+    /* border-color: #C4AA86 → hsl(30, 33%, 65%) */
+    --border: 30 33% 65%;
+    --input: 30 33% 65%;
+    /* coral ring */
+    --ring: 27 34% 48%;
+
     --radius: 0.5rem;
   }
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 24 95% 53%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 24 95% 53%;
-  }
-}
-
-@layer base {
+  /* ── Base resets ── */
   * {
     @apply border-border;
   }
+
+  html {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    background-color: var(--bg);
+    color: var(--text);
     min-height: 100vh;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.5;
+  }
+
+  /* Tabular figures for all numbers */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ── Neubrutalism Utility Classes ── */
+@layer components {
+  /* ── Neo Card ── */
+  .neo-card {
+    background-color: var(--surface);
+    border: var(--neo-border-width) solid var(--neo-border-color);
+    border-radius: 8px;
+    box-shadow: var(--neo-shadow);
+    padding: 16px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .neo-card-interactive {
+    background-color: var(--surface);
+    border: var(--neo-border-width) solid var(--neo-border-color);
+    border-radius: 8px;
+    box-shadow: var(--neo-shadow);
+    padding: 16px;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .neo-card-interactive:hover {
+    transform: translate(var(--neo-translate-hover), var(--neo-translate-hover));
+    box-shadow: var(--neo-shadow-hover);
+  }
+  .neo-card-interactive:active {
+    transform: translate(var(--neo-translate-active), var(--neo-translate-active));
+    box-shadow: none;
+  }
+
+  /* ── Neo Button base ── */
+  .neo-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    border: var(--neo-border-width) solid var(--neo-border-color);
+    border-radius: 8px;
+    box-shadow: var(--neo-shadow-sm);
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+    min-height: 40px;
+  }
+  .neo-btn:hover {
+    transform: translate(1px, 1px);
+    box-shadow: 1px 1px 0 var(--neo-border-color);
+  }
+  .neo-btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: none;
+  }
+  .neo-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: var(--neo-shadow-sm);
+  }
+
+  .neo-btn-primary {
+    background-color: var(--coral);
+    color: var(--coral-foreground);
+  }
+  .neo-btn-primary:hover {
+    background-color: var(--coral-hover);
+  }
+
+  .neo-btn-secondary {
+    background-color: var(--surface);
+    color: var(--text);
+  }
+  .neo-btn-secondary:hover {
+    background-color: var(--surface-2);
+  }
+
+  .neo-btn-destructive {
+    background-color: var(--cancelled);
+    color: white;
+  }
+
+  .neo-btn-ghost {
+    background-color: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    color: var(--text);
+  }
+  .neo-btn-ghost:hover {
+    background-color: var(--surface-2);
+    transform: none;
+    box-shadow: none;
+  }
+  .neo-btn-ghost:active {
+    background-color: var(--coral-soft);
+  }
+
+  /* ── Neo Input ── */
+  .neo-input {
+    width: 100%;
+    background-color: var(--surface);
+    border: var(--neo-border-width) solid var(--neo-border-color);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    min-height: 40px;
+    color: var(--text);
+    outline: none;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+  .neo-input::placeholder {
+    color: var(--text-muted);
+  }
+  .neo-input:focus {
+    border-color: var(--coral);
+    box-shadow: 0 0 0 2px var(--coral-soft);
+  }
+  .neo-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* ── Neo Highlight (marker effect) ── */
+  .neo-highlight {
+    background-color: var(--coral-soft);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 700;
+    display: inline-block;
+    border: 1px solid var(--neo-border-color);
+  }
+
+  /* ── Neo Badge / Pill ── */
+  .neo-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 9999px;
+    border: 1.5px solid var(--neo-border-color);
+    white-space: nowrap;
+  }
+
+  /* ── Status pills ── */
+  .neo-pill-paid {
+    background-color: var(--paid-bg);
+    color: var(--paid);
+    border-color: var(--paid);
+  }
+  .neo-pill-draft {
+    background-color: var(--draft-bg);
+    color: var(--draft);
+    border-color: var(--draft);
+  }
+  .neo-pill-cancelled {
+    background-color: var(--cancelled-bg);
+    color: var(--cancelled);
+    border-color: var(--cancelled);
+  }
+  .neo-pill-info {
+    background-color: var(--info-bg);
+    color: var(--info);
+    border-color: var(--info);
+  }
+
+  /* ── Neo Modal overlay ── */
+  .neo-overlay {
+    background-color: rgba(58, 42, 30, 0.4);
+    backdrop-filter: blur(2px);
+  }
+
+  /* ── Neo Table ── */
+  .neo-table {
+    width: 100%;
+    font-size: 14px;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .neo-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .neo-table th {
+    background-color: var(--coral-soft);
+    font-weight: 600;
+    text-align: left;
+    padding: 12px 16px;
+    border-bottom: 3px solid var(--neo-border-color);
+    color: var(--text);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .neo-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+  }
+  .neo-table tbody tr {
+    transition: background-color 0.1s ease;
+  }
+  .neo-table tbody tr:hover {
+    background-color: var(--surface-2);
+  }
+  .neo-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+  .neo-table .text-right {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Touch target minimum for POS/KDS ── */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* ── Neo Keypad key ── */
+  .neo-key {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 700;
+    min-width: 56px;
+    min-height: 56px;
+    background-color: var(--surface);
+    border: var(--neo-border-width) solid var(--neo-border-color);
+    border-radius: 8px;
+    box-shadow: var(--neo-shadow-sm);
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+    user-select: none;
+  }
+  .neo-key:hover {
+    background-color: var(--surface-2);
+  }
+  .neo-key:active {
+    transform: translate(2px, 2px);
+    box-shadow: none;
+    background-color: var(--coral-soft);
+  }
+  .neo-key-active {
+    background-color: var(--coral);
+    color: var(--coral-foreground);
+  }
+
+  /* ── Scrollbar styling ── */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--surface-2);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--coral);
+  }
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

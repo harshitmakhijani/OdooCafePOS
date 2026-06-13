@@ -1,56 +1,58 @@
-import type { FormEvent, ReactNode } from 'react';
-import { Button } from '@/components/ui/button';
+import { type ReactNode, type FormEvent } from 'react';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
-export interface InlineCreateModalProps {
+interface InlineCreateModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  description?: string;
-  /** The form fields. */
   children: ReactNode;
-  onSubmit: () => void;
-  submitLabel?: string;
+  onSubmit: (e: FormEvent) => void;
   isSubmitting?: boolean;
+  submitLabel?: string;
 }
 
 /**
- * Reusable inline-create modal (base prompt §6) — e.g. creating a Category
- * without leaving the Product form (PRD §8.2). Presentation only.
+ * Compact FormShell in a modal for "create on the fly" (e.g. new Category from Product form).
+ * On save, returns the new record and selects it in the originating field without losing
+ * the parent form's state.
  */
 export function InlineCreateModal({
   open,
   onOpenChange,
   title,
-  description,
   children,
   onSubmit,
-  submitLabel = 'Create',
   isSubmitting = false,
+  submitLabel = 'Create',
 }: InlineCreateModalProps) {
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    onSubmit();
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-            {description && <DialogDescription>{description}</DialogDescription>}
-          </DialogHeader>
-          <div className="space-y-4 py-4">{children}</div>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSubmit(e);
+          }}
+          className="space-y-4"
+        >
+          {children}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>
