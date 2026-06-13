@@ -46,8 +46,8 @@ export function SessionLanding() {
     try {
       setLoading(true);
       setError(null);
-      const res = await api.get<CurrentSessionResponse>('/sessions/current');
-      const data = res.data;
+      const res = await api.get<SuccessEnvelope<CurrentSessionResponse>>('/sessions/current');
+      const data = res.data.data;
       setCurrentSession(data.currentSession);
       setLastSessionDate(data.lastSessionDate);
       setLastClosingSale(data.lastClosingSale);
@@ -99,7 +99,7 @@ export function SessionLanding() {
     setActionLoading(true);
     try {
       const res = await api.post(`/sessions/${currentSession.id}/close`);
-      const { summary } = res.data;
+      const { summary } = res.data?.data ?? res.data;
       setSummaryData({
         orderCount: summary.orderCount,
         totalSales: summary.totalSales.toString(),

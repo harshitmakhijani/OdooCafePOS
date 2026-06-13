@@ -6,7 +6,7 @@ A web-based Point-of-Sale system for a cafe/restaurant. One backend + one Postgr
 - **POS Terminal** — cashier-facing ordering loop
 - **Kitchen Display System (KDS)** — real-time order tickets
 
-> This repository is currently a **foundation scaffold** (base/phase-0). It compiles, boots, and is fully navigable, but business logic is intentionally **not** implemented yet — unimplemented backend handlers `throw new NotImplementedException()` and frontend pages are labelled placeholders. Every gap carries a `// TODO(PRD §x.y)` anchor pointing at the spec. See [`PRD_Cafe_POS.md`](../PRD_Cafe_POS.md) for the authoritative specification.
+> **Status:** the backend (auth, sessions, pricing, orders, cash + Razorpay payments, receipts, realtime, reports, KDS, and all CRUD) and the frontend surfaces (POS order/table/session/customers/orders, Admin screens, KDS) are **implemented and building**. See [`END_TO_END_AUDIT.md`](./END_TO_END_AUDIT.md) for the current audit + remediation log, and [`PRD_Cafe_POS.md`](../PRD_Cafe_POS.md) for the authoritative specification. (The older [`AUDIT_REPORT.md`](./AUDIT_REPORT.md) describes an earlier scaffold state and is superseded.)
 
 ## Tech stack
 

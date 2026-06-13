@@ -3,6 +3,7 @@ import { ListShell, type ListColumn } from '@/components/shells/ListShell';
 import { FormShell } from '@/components/shells/FormShell';
 import { InlineCreateModal } from '@/components/shells/InlineCreateModal';
 import { api } from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/errors';
 import { Plus } from 'lucide-react';
 
 interface Category {
@@ -122,9 +123,9 @@ export function Products() {
 
       setView('list');
       fetchInitialData();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err?.response?.data?.message || 'Failed to save product.');
+      setError(getApiErrorMessage(err, 'Failed to save product.'));
     } finally {
       setSubmitting(false);
     }
@@ -136,7 +137,7 @@ export function Products() {
       setError(null);
       await Promise.all(ids.map((id) => api.delete(`/products/${id}`)));
       fetchInitialData();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
       setError('Failed to delete selected products. They might be referenced in transactions.');
     }
@@ -158,9 +159,9 @@ export function Products() {
       setFormCategoryId(newCat.id);
       setInlineCategoryOpen(false);
       setInlineCatName('');
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      alert(err?.response?.data?.message || 'Failed to create inline category.');
+      alert(getApiErrorMessage(err, 'Failed to create inline category.'));
     } finally {
       setInlineCatSubmitting(false);
     }

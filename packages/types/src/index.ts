@@ -127,6 +127,8 @@ export interface KdsTicket {
   orderId: string;
   orderNumber: number;
   stage: KdsStage;
+  /** ISO timestamp of when the order was sent to the kitchen (null if not yet sent). */
+  sentToKitchenAt: string | null;
   lines: KdsTicketLine[];
 }
 

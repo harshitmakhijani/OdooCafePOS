@@ -69,6 +69,7 @@ export class KdsService {
       orderId: o.id,
       orderNumber: o.orderNumber,
       stage: o.kdsStage as KdsStage,
+      sentToKitchenAt: o.sentToKitchenAt ? o.sentToKitchenAt.toISOString() : null,
       lines: o.lines.map((l) => ({
         orderLineId: l.id,
         name: l.productName,
@@ -122,6 +123,7 @@ export class KdsService {
       orderId: updated.id,
       orderNumber: updated.orderNumber,
       stage: updated.kdsStage as KdsStage,
+      sentToKitchenAt: updated.sentToKitchenAt ? updated.sentToKitchenAt.toISOString() : null,
       lines: updated.lines.map((l) => ({
         orderLineId: l.id,
         name: l.productName,
@@ -172,6 +174,7 @@ export class KdsService {
       orderId: order.id,
       orderNumber: order.orderNumber,
       stage: order.kdsStage as KdsStage,
+      sentToKitchenAt: order.sentToKitchenAt ? order.sentToKitchenAt.toISOString() : null,
       lines: order.lines.map((l) => ({
         orderLineId: l.id,
         name: l.productName,

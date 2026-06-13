@@ -52,9 +52,16 @@ api.interceptors.response.use(
     const original = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined;
     if (error.response?.status === 401 && original && !original._retry) {
       original._retry = true;
-      refreshing = refreshing ?? refreshAccessToken();
+      // Dedup concurrent refreshes: all 401s awaiting at once share ONE refresh
+      // promise, and it's only cleared once that promise settles (in .finally) —
+      // never after the first awaiter resumes, which would let a second 401 fire
+      // a redundant refresh with an already-rotated token and force a logout.
+      if (!refreshing) {
+        refreshing = refreshAccessToken().finally(() => {
+          refreshing = null;
+        });
+      }
       const newToken = await refreshing;
-      refreshing = null;
       if (newToken) {
         original.headers.Authorization = `Bearer ${newToken}`;
         return api(original);

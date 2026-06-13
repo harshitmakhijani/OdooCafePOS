@@ -127,6 +127,19 @@ export function validateEnv(config: Record<string, unknown>): EnvironmentVariabl
           `Set them in the environment (PRD §15, §16.1).`,
       );
     }
+
+    // JWT secrets must be strong in production — a short/guessable secret makes
+    // token forgery feasible (PRD §16.1). 32 chars ≈ 256 bits of entropy minimum.
+    const MIN_JWT_SECRET_LENGTH = 32;
+    const weakJwtSecrets = (
+      ['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET'] as const
+    ).filter((k) => validated[k].length < MIN_JWT_SECRET_LENGTH);
+    if (weakJwtSecrets.length > 0) {
+      throw new Error(
+        `JWT secrets too short (< ${MIN_JWT_SECRET_LENGTH} chars): ${weakJwtSecrets.join(', ')}. ` +
+          `Use a long random value in production (PRD §16.1).`,
+      );
+    }
   }
 
   return validated;

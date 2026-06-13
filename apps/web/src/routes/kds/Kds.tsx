@@ -157,7 +157,7 @@ export function Kds() {
   };
 
   // Format elapsed time (e.g. "5m ago" or "45m ago")
-  const getElapsedTime = (sentTimeStr?: string) => {
+  const getElapsedTime = (sentTimeStr?: string | null) => {
     if (!sentTimeStr) return 'N/A';
     const sentTime = new Date(sentTimeStr);
     const diffMs = currentTime.getTime() - sentTime.getTime();
@@ -166,7 +166,7 @@ export function Kds() {
   };
 
   // Determine critical alert level styling based on minutes in kitchen
-  const getTimerStyle = (sentTimeStr?: string) => {
+  const getTimerStyle = (sentTimeStr?: string | null) => {
     if (!sentTimeStr) return 'bg-white border-black text-black';
     const sentTime = new Date(sentTimeStr);
     const diffMins = Math.max(0, Math.floor((currentTime.getTime() - sentTime.getTime()) / 60000));

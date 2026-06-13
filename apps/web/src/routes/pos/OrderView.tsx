@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
+import type { RazorpayHandlerResponse, RazorpayFailureResponse, RazorpayOptions } from '@/types/razorpay';
 import { useCartStore } from '@/stores/cart.store';
 import {
   Search,
@@ -104,7 +105,7 @@ export function OrderView() {
   const [emailSuccess, setEmailSuccess] = useState(false);
 
   // Debouncing API updates
-  const syncTimeoutRef = useRef<any | null>(null);
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Fetch initial catalog data
   useEffect(() => {
@@ -146,7 +147,7 @@ export function OrderView() {
     };
 
     fetchData();
-  }, [orderId]);
+  }, [orderId, navigate, setActiveOrder, setCustomer]);
 
   // Sync state to API with debounce
   const syncLinesToBackend = async (linesToSync: { productId: string; quantity: number; unitPrice?: number }[], customerId?: string | null) => {
@@ -202,7 +203,7 @@ export function OrderView() {
   const handleAddProduct = (product: Product) => {
     if (!order || order.status !== 'DRAFT') return;
 
-    let updatedLines = [...order.lines];
+    const updatedLines = [...order.lines];
     const existingIndex = updatedLines.findIndex((l) => l.productId === product.id);
 
     if (existingIndex > -1) {
@@ -345,7 +346,7 @@ export function OrderView() {
     setShowCustomerModal(true);
     try {
       const res = await api.get('/customers', { params: { pageSize: 15 } });
-      setCustomersList((res.data?.data ?? res.data) as any);
+      setCustomersList((res.data?.data ?? res.data) as { id: string; name: string; phone: string | null }[]);
     } catch (err) {
       // ignore
     }
@@ -387,7 +388,7 @@ export function OrderView() {
 
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {
-      if ((window as any).Razorpay) {
+      if (window.Razorpay) {
         resolve(true);
         return;
       }
@@ -410,16 +411,16 @@ export function OrderView() {
       }
 
       const res = await api.post(`/orders/${order.id}/pay/razorpay/create`);
-      const { razorpayOrderId, amount, currency, keyId } = res.data;
+      const { razorpayOrderId, amount, currency, keyId } = res.data?.data ?? res.data;
 
-      const options = {
+      const options: RazorpayOptions = {
         key: keyId,
         amount,
         currency,
         name: 'Oddo Cafe',
         description: `Order #${order.orderNumber}`,
         order_id: razorpayOrderId,
-        handler: async (response: any) => {
+        handler: async (response: RazorpayHandlerResponse) => {
           try {
             setSyncing(true);
             const verifyRes = await api.post(`/orders/${order.id}/pay/razorpay/verify`, {
@@ -448,8 +449,8 @@ export function OrderView() {
         }
       };
 
-      const rzp = new (window as any).Razorpay(options);
-      rzp.on('payment.failed', (resp: any) => {
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', (resp: RazorpayFailureResponse) => {
         alert(`Payment failed: ${resp.error.description}`);
       });
       rzp.open();
@@ -479,7 +480,7 @@ export function OrderView() {
         cashReceived: parseFloat(cashReceived)
       });
       
-      const resData = res.data;
+      const resData = res.data?.data ?? res.data;
       setOrder(resData.order);
       setChangeDue(parseFloat(resData.changeDue));
       setPaymentSuccess(true);

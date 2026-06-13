@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ListShell, type ListColumn } from '@/components/shells/ListShell';
 import { InlineCreateModal } from '@/components/shells/InlineCreateModal';
 import { api } from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/errors';
 
 interface Category {
   id: string;
@@ -86,9 +87,9 @@ export function Categories() {
 
       setDialogOpen(false);
       fetchCategories();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err?.response?.data?.message || 'Failed to save category.');
+      setError(getApiErrorMessage(err, 'Failed to save category.'));
     } finally {
       setSubmitting(false);
     }
@@ -100,7 +101,7 @@ export function Categories() {
       setError(null);
       await Promise.all(ids.map((id) => api.delete(`/categories/${id}`)));
       fetchCategories();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
       setError('Failed to delete selected categories. They might be referenced by products.');
     }

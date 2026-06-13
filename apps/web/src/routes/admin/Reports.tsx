@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import {
   ResponsiveContainer,
@@ -103,7 +103,7 @@ export function Reports() {
   }, []);
 
   // Fetch report data on filter changes
-  const fetchReportData = async () => {
+  const fetchReportData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -135,13 +135,13 @@ export function Reports() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [period, from, to, employeeId, productId]);
 
   useEffect(() => {
     // Only fire if custom ranges are fully filled or non-custom period is selected
     if (period === 'custom' && (!from || !to)) return;
     fetchReportData();
-  }, [period, from, to, employeeId, productId]);
+  }, [fetchReportData, period, from, to]);
 
   const handleResetFilters = () => {
     setPeriod('month');
@@ -410,7 +410,7 @@ export function Reports() {
                             ))}
                           </Pie>
                           <Tooltip
-                            formatter={(value: any) => `₹${Number(value).toFixed(2)}`}
+                            formatter={(value) => `₹${Number(value).toFixed(2)}`}
                             contentStyle={{
                               backgroundColor: '#FFF',
                               border: '2px solid black',

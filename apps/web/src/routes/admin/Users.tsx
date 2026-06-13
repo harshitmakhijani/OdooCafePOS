@@ -3,6 +3,7 @@ import { ListShell, type ListColumn } from '@/components/shells/ListShell';
 import { FormShell } from '@/components/shells/FormShell';
 import { InlineCreateModal } from '@/components/shells/InlineCreateModal';
 import { api } from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/errors';
 import { Role, UserStatus } from '@cafe-pos/types';
 import { KeyRound } from 'lucide-react';
 
@@ -95,9 +96,9 @@ export function Users() {
 
       setView('list');
       fetchUsers();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err?.response?.data?.message || 'Failed to save user account.');
+      setError(getApiErrorMessage(err, 'Failed to save user account.'));
     } finally {
       setSubmitting(false);
     }
@@ -109,7 +110,7 @@ export function Users() {
       setError(null);
       await Promise.all(ids.map((id) => api.delete(`/users/${id}`)));
       fetchUsers();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
       setError('Failed to delete selected users.');
     }
@@ -125,7 +126,7 @@ export function Users() {
       await api.patch(`/users/${editingUser.id}/archive`);
       setView('list');
       fetchUsers();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
       setError('Failed to change user status.');
     } finally {
@@ -144,9 +145,9 @@ export function Users() {
       setPasswordOpen(false);
       setFormPassword('');
       alert('Password updated successfully.');
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      alert(err?.response?.data?.message || 'Failed to update password.');
+      alert(getApiErrorMessage(err, 'Failed to update password.'));
     } finally {
       setPasswordSubmitting(false);
     }

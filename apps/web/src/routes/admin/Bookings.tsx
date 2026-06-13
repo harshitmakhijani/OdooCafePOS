@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ListShell, type ListColumn } from '@/components/shells/ListShell';
 import { FormShell } from '@/components/shells/FormShell';
 import { api } from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/errors';
 import { BookingStatus } from '@cafe-pos/types';
 
 interface Customer {
@@ -15,6 +16,11 @@ interface Table {
   tableNumber: number;
   seats: number;
   floor: { name: string };
+}
+
+interface FloorWithTables {
+  name: string;
+  tables?: { id: string; tableNumber: number; seats: number }[];
 }
 
 interface Booking {
@@ -70,11 +76,11 @@ export function Bookings() {
       setCustomers(customersRes.data.data);
       
       // Extract tables from floor layout
-      const floors = tablesRes.data.data || [];
+      const floors: FloorWithTables[] = tablesRes.data.data || [];
       const extractedTables: Table[] = [];
-      floors.forEach((f: any) => {
+      floors.forEach((f) => {
         if (f.tables) {
-          f.tables.forEach((t: any) => {
+          f.tables.forEach((t) => {
             extractedTables.push({
               id: t.id,
               tableNumber: t.tableNumber,
@@ -181,9 +187,9 @@ export function Bookings() {
 
       setView('list');
       fetchInitialData();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err?.response?.data?.message || 'Failed to save booking. Check for time overlap.');
+      setError(getApiErrorMessage(err, 'Failed to save booking. Check for time overlap.'));
     } finally {
       setSubmitting(false);
     }
@@ -195,7 +201,7 @@ export function Bookings() {
       setError(null);
       await Promise.all(ids.map((id) => api.delete(`/bookings/${id}`)));
       fetchInitialData();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
       setError('Failed to cancel selected bookings.');
     }

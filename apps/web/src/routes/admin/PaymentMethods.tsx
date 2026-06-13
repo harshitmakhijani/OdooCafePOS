@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ListShell, type ListColumn } from '@/components/shells/ListShell';
 import { InlineCreateModal } from '@/components/shells/InlineCreateModal';
 import { api } from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/errors';
 import { PaymentType } from '@cafe-pos/types';
 
 interface PaymentMethod {
@@ -89,9 +90,9 @@ export function PaymentMethods() {
 
       setDialogOpen(false);
       fetchMethods();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err?.response?.data?.message || 'Failed to save payment method.');
+      setError(getApiErrorMessage(err, 'Failed to save payment method.'));
     } finally {
       setSubmitting(false);
     }
@@ -103,7 +104,7 @@ export function PaymentMethods() {
       setError(null);
       await Promise.all(ids.map((id) => api.delete(`/payment-methods/${id}`)));
       fetchMethods();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
       setError('Failed to delete selected payment methods.');
     }

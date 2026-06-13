@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ListShell, type ListColumn } from '@/components/shells/ListShell';
 import { FormShell } from '@/components/shells/FormShell';
 import { api } from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/errors';
 import { PromotionType, PromotionScope, DiscountType } from '@cafe-pos/types';
 
 interface Product {
@@ -116,7 +117,7 @@ export function Promotions() {
       setSubmitting(true);
       setError(null);
 
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         name: formName.trim(),
         type: formType,
         discountType: formDiscType,
@@ -145,9 +146,9 @@ export function Promotions() {
 
       setView('list');
       fetchInitialData();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err?.response?.data?.message || 'Failed to save promotion.');
+      setError(getApiErrorMessage(err, 'Failed to save promotion.'));
     } finally {
       setSubmitting(false);
     }
@@ -159,7 +160,7 @@ export function Promotions() {
       setError(null);
       await Promise.all(ids.map((id) => api.delete(`/promotions/${id}`)));
       fetchInitialData();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
       setError('Failed to delete selected promotions.');
     }

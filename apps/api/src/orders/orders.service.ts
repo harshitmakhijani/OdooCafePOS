@@ -286,6 +286,7 @@ export class OrdersService {
       orderId: updated.id,
       orderNumber: updated.orderNumber,
       stage: KdsStage.TO_COOK,
+      sentToKitchenAt: updated.sentToKitchenAt ? updated.sentToKitchenAt.toISOString() : null,
       lines: kdsLines.map((l) => ({
         orderLineId: l.id,
         name: l.productName,
