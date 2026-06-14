@@ -144,7 +144,11 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
 
     // Idempotent check
     if (order.status === OrderStatus.PAID) {
-      return order.payment;
+      const fullOrder = await this.prisma.order.findUnique({
+        where: { id },
+        include: { lines: true, payment: true, customer: true },
+      });
+      return { order: fullOrder, payment: order.payment };
     }
 
     // The Razorpay order id is established SERVER-SIDE by razorpayCreate and stored
@@ -190,9 +194,12 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       },
     });
 
-    await this.ordersService.markPaid(id);
+    const updatedOrder = await this.ordersService.markPaid(id);
 
-    return payment;
+    return {
+      order: updatedOrder,
+      payment,
+    };
   }
 
   async webhook(rawBody: Buffer | string | undefined, signature: string) {
