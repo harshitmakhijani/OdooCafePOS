@@ -66,6 +66,7 @@ export class ExportService implements OnModuleInit, OnModuleDestroy {
   private launchBrowser(): Promise<Browser> {
     return puppeteer.launch({
       headless: true,
+      executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
   }

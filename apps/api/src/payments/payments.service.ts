@@ -45,6 +45,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     try {
       this.browser = await puppeteer.launch({
         headless: true,
+        executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
       });
     } catch (err) {
@@ -294,6 +295,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     if (!this.browser) {
       this.browser = await puppeteer.launch({
         headless: true,
+        executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
       });
     }
