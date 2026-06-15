@@ -582,7 +582,7 @@ export function OrderView() {
               placeholder="Search catalog..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full nb-input pl-9"
+              className="w-full nb-input !pl-9"
             />
           </div>
 

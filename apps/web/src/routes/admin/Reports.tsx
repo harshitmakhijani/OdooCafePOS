@@ -37,7 +37,7 @@ interface CategoryRevenue {
 interface TopProduct {
   productId: string;
   name: string;
-  quantity: number;
+  quantitySold: number;
   revenue: number;
 }
 
@@ -486,7 +486,7 @@ export function Reports() {
                       topProducts.map((p, idx) => (
                         <tr key={idx} className="border-b border-black hover:bg-neutral-50">
                           <td className="px-4 py-3 border-r-2 border-black">{p.name}</td>
-                          <td className="px-4 py-3 border-r-2 border-black text-center font-mono">{Number(p.quantity)}</td>
+                          <td className="px-4 py-3 border-r-2 border-black text-center font-mono">{Number(p.quantitySold)}</td>
                           <td className="px-4 py-3 text-right font-mono">₹{Number(p.revenue).toFixed(2)}</td>
                         </tr>
                       ))

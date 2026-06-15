@@ -11,12 +11,14 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
+  hasActiveSession: boolean;
   setSession: (payload: {
     user: AuthUser;
     accessToken: string;
     refreshToken: string;
   }) => void;
   setAccessToken: (accessToken: string) => void;
+  setHasActiveSession: (hasActiveSession: boolean) => void;
   clear: () => void;
 }
 
@@ -27,11 +29,19 @@ export const useAuthStore = create<AuthState>()(
       accessToken: null,
       refreshToken: null,
       isAuthenticated: false,
+      hasActiveSession: false,
       setSession: ({ user, accessToken, refreshToken }) =>
         set({ user, accessToken, refreshToken, isAuthenticated: true }),
       setAccessToken: (accessToken) => set({ accessToken }),
+      setHasActiveSession: (hasActiveSession) => set({ hasActiveSession }),
       clear: () =>
-        set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false }),
+        set({
+          user: null,
+          accessToken: null,
+          refreshToken: null,
+          isAuthenticated: false,
+          hasActiveSession: false,
+        }),
     }),
     { name: 'cafe-pos-auth' },
   ),

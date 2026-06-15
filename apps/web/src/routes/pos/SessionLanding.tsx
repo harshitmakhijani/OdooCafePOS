@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
 import type { SuccessEnvelope } from '@cafe-pos/types';
+import { Role } from '@cafe-pos/types';
+import { useAuthStore } from '@/stores/auth.store';
+import { useAuth } from '@/auth/AuthContext';
 
 interface Session {
   id: string;
@@ -29,6 +32,8 @@ interface Register {
 
 export function SessionLanding() {
   const navigate = useNavigate();
+  const { role } = useAuth();
+  const setHasActiveSession = useAuthStore((s) => s.setHasActiveSession);
   const [loading, setLoading] = useState(true);
   const [registers, setRegisters] = useState<Register[]>([]);
   const [selectedRegisterId, setSelectedRegisterId] = useState('');
@@ -49,6 +54,7 @@ export function SessionLanding() {
       const res = await api.get<SuccessEnvelope<CurrentSessionResponse>>('/sessions/current');
       const data = res.data.data;
       setCurrentSession(data.currentSession);
+      setHasActiveSession(!!data.currentSession);
       setLastSessionDate(data.lastSessionDate);
       setLastClosingSale(data.lastClosingSale);
 
@@ -80,6 +86,7 @@ export function SessionLanding() {
     setActionLoading(true);
     try {
       await api.post('/sessions/open', { registerId: selectedRegisterId });
+      setHasActiveSession(true);
       navigate('/pos/tables');
     } catch (err) {
       const message =
@@ -106,6 +113,7 @@ export function SessionLanding() {
       });
       setShowSummaryModal(true);
       setCurrentSession(null);
+      setHasActiveSession(false);
       fetchSessionStatus();
     } catch (err) {
       const message =
@@ -234,6 +242,15 @@ export function SessionLanding() {
               {actionLoading ? 'Opening Session...' : 'Open Session ➔'}
             </button>
           </form>
+          {role === Role.ADMIN && (
+            <button
+              type="button"
+              onClick={() => navigate('/admin')}
+              className="w-full nb-button-secondary py-3 text-sm font-black uppercase tracking-wider mt-2"
+            >
+              Go to Admin Backend ➔
+            </button>
+          )}
         </div>
       )}
 

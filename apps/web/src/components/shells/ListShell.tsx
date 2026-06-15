@@ -80,7 +80,7 @@ export function ListShell<T>({
           <input
             type="text"
             placeholder="Search record..."
-            className="nb-input w-full pl-11 py-2.5 font-bold text-black border-2 border-black"
+            className="nb-input w-full !pl-10 py-2.5 font-bold text-black border-2 border-black"
             value={searchValue}
             onChange={(e) => onSearchChange(e.target.value)}
           />

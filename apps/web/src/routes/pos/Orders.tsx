@@ -142,7 +142,7 @@ export function Orders() {
             setSearch(e.target.value);
             setPage(1);
           }}
-          className="w-full nb-input pl-10 py-3"
+          className="w-full nb-input !pl-10 py-3"
         />
       </div>
 

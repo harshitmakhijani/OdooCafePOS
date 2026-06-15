@@ -263,7 +263,7 @@ export function Kds() {
             <input
               type="text"
               placeholder="Order # or Item..."
-              className="nb-input w-full pl-9 py-1.5 border-2 border-black font-bold text-xs"
+              className="nb-input w-full !pl-9 py-1.5 border-2 border-black font-bold text-xs"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
